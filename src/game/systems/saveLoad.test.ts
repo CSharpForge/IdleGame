@@ -60,7 +60,6 @@ describe('createValidatedStorage', () => {
 
   it('rejects an invalid room status value', () => {
     const value = validPersistedValue()
-    // @ts-expect-error deliberately corrupting the shape for the test
     value.state.rooms['room-1'].status = 'on-fire'
     localStorage.setItem(KEY, JSON.stringify(value))
     const storage = createValidatedStorage()
