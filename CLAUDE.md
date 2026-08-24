@@ -120,4 +120,34 @@ No `chromium-cli` in this environment; a raw Playwright script (`chromium.launch
 
 ## Mobile (Capacitor)
 
-Android platform (`android/`) added via `npx cap add android`, app id `com.grandstay.tycoon`. UI is built mobile-first (large tap targets, safe-area insets, `touch-action: none` on the canvas). This container has no Java/Android SDK, so `npm run cap:android` (launches on-device) can't run here — only `npm run cap:sync` (build + copy assets into the native project) is verifiable in this environment.
+Android platform (`android/`) added via `npx cap add android`, app id `com.grandstay.tycoon`. UI is built mobile-first (large tap targets, safe-area insets, `touch-action: none` on the canvas).
+
+**A real Android emulator is available in this environment as of 2026-08-23 — use it, don't just eyeball the web version and assume mobile is fine.** Android Studio is installed (snap), with an SDK at `~/Android/Sdk` and an existing AVD named `Medium_Phone`. Two gotchas that cost real time to work out:
+
+- **Gradle needs JDK 21, not the JDK 25 bundled with Android Studio's JBR.** `./gradlew` fails with `Unsupported class file major version 69` on the Studio JBR (`/snap/android-studio/241/jbr`). A portable Temurin 21 was downloaded (no root needed) to `~/jdks/jdk-21.0.12.1+1` — point `JAVA_HOME` at that for any Gradle/Capacitor Android build, not the Studio JBR.
+- **No system-wide `adb`/`java`/Android env vars are set by default** — export them per session (or add to shell rc):
+  ```bash
+  export ANDROID_HOME="$HOME/Android/Sdk"
+  export ANDROID_SDK_ROOT="$HOME/Android/Sdk"
+  export JAVA_HOME="$HOME/jdks/jdk-21.0.12.1+1"
+  export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+  ```
+
+Full on-device test loop (the emulator has real KVM acceleration here — `/dev/kvm` exists — so it boots and runs at real speed, not a slow software fallback... except the renderer itself, see below):
+```bash
+# boot once per session (skip if adb devices already shows one)
+nohup ~/Android/Sdk/emulator/emulator -avd Medium_Phone -no-snapshot-load > /tmp/emulator.log 2>&1 & disown
+adb wait-for-device
+until adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1; do sleep 3; done
+
+npm run cap:sync                                   # build web + copy into android/
+cd android && ./gradlew assembleDebug --console=plain
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell am force-stop com.grandstay.tycoon
+adb shell am start -n com.grandstay.tycoon/.MainActivity
+adb exec-out screencap -p > screenshot.png          # visual verification, same as the Playwright pattern
+adb shell input tap <x> <y>                         # simulate touch
+adb shell input swipe <x1> <y1> <x2> <y2> <ms>       # simulate drag (camera orbit)
+```
+
+**This host's GPU passthrough into the emulator doesn't work** (`emulator.log` reports "Your GPU drivers may have a bug, switching to software rendering"), which surfaced a real, worth-keeping bug: `@react-three/postprocessing`'s `<Outline>` effect renders a corrupted, ghosted double-exposure of the whole scene under a software (SwiftShader/llvmpipe) WebGL renderer, confirmed by A/B disabling it. Since some real low-end/older Android devices also fall back to software rendering, `src/scene/materials/rendererCapabilities.ts`'s `isSoftwareRenderer()` detects this via `WEBGL_debug_renderer_info` and `Scene.tsx` skips the `<Outline>` pass entirely when true — the toon-shaded scene still reads fine without the edge highlight, which beats shipping a visibly broken effect.

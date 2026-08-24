@@ -1,14 +1,19 @@
+import { useState } from 'react'
 import { OrbitControls } from '@react-three/drei'
+import { useThree } from '@react-three/fiber'
 import { EffectComposer, Outline, Selection } from '@react-three/postprocessing'
 import { useGameStore } from '../game/state/store'
 import { getLocationThemeDef } from '../game/data/locationThemes'
 import { Building } from './hotel/Building'
 import { GuestSimulation } from './guests/GuestSimulation'
 import { orbitControlsRef } from './cameraControls'
+import { isSoftwareRenderer } from './materials/rendererCapabilities'
 
 export function Scene() {
   const themeId = useGameStore((s) => s.activeLocation().themeId)
   const theme = getLocationThemeDef(themeId)
+  const gl = useThree((state) => state.gl)
+  const [outlineSupported] = useState(() => !isSoftwareRenderer(gl))
 
   return (
     <>
@@ -27,9 +32,11 @@ export function Scene() {
       <Selection>
         <Building />
         <GuestSimulation />
-        <EffectComposer autoClear={false}>
-          <Outline visibleEdgeColor={0x2b2d42} hiddenEdgeColor={0x2b2d42} edgeStrength={3.5} blur />
-        </EffectComposer>
+        {outlineSupported && (
+          <EffectComposer autoClear={false}>
+            <Outline visibleEdgeColor={0x2b2d42} hiddenEdgeColor={0x2b2d42} edgeStrength={3.5} blur />
+          </EffectComposer>
+        )}
       </Selection>
 
       <OrbitControls
