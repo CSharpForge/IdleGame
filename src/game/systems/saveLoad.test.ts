@@ -32,11 +32,16 @@ function validPersistedValue() {
       upgradeLevels: { marketing: 0, staffTraining: 0, concierge: 0 },
       prestigePoints: 0,
       prestigeCount: 0,
+      prestigeUpgradeLevels: { cheaperRooms: 0, headStart: 0, staffSynergy: 0, satisfactionFloor: 0 },
       activeEvent: null,
+      eventsExperienced: 0,
+      currentSatisfactionStreakSeconds: 0,
+      bestSatisfactionStreakSeconds: 0,
+      totalPlaytimeSeconds: 0,
       unlockedAchievementIds: [],
       muted: false,
     },
-    version: 3,
+    version: 4,
   }
 }
 

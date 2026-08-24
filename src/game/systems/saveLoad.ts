@@ -43,6 +43,13 @@ const activeEventSchema = z
   })
   .nullable()
 
+const prestigeUpgradeLevelsSchema = z.object({
+  cheaperRooms: z.number(),
+  headStart: z.number(),
+  staffSynergy: z.number(),
+  satisfactionFloor: z.number(),
+})
+
 /**
  * The full, current-version shape. Used as a final sanity check AFTER
  * migration (see migrations.ts) — never at the raw storage-read layer,
@@ -58,7 +65,12 @@ export const persistedStateSchema = z.object({
   upgradeLevels: upgradeLevelsSchema,
   prestigePoints: z.number(),
   prestigeCount: z.number(),
+  prestigeUpgradeLevels: prestigeUpgradeLevelsSchema,
   activeEvent: activeEventSchema,
+  eventsExperienced: z.number(),
+  currentSatisfactionStreakSeconds: z.number(),
+  bestSatisfactionStreakSeconds: z.number(),
+  totalPlaytimeSeconds: z.number(),
   unlockedAchievementIds: z.array(z.string()),
   muted: z.boolean().optional(),
 })

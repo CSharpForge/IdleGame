@@ -26,8 +26,8 @@ function v2State() {
   }
 }
 
-describe('migrateSave: v1 -> v3 (full chain)', () => {
-  it('upgrades a v1 save all the way to the current v3 shape', () => {
+describe('migrateSave: v1 -> v4 (full chain)', () => {
+  it('upgrades a v1 save all the way to the current v4 shape', () => {
     const migrated = migrateSave(v1State(), 1) as Record<string, unknown>
 
     expect(persistedStateSchema.safeParse(migrated).success).toBe(true)
@@ -38,6 +38,16 @@ describe('migrateSave: v1 -> v3 (full chain)', () => {
     expect(migrated.upgradeLevels).toEqual({ marketing: 0, staffTraining: 0, concierge: 0 })
     expect(migrated.prestigePoints).toBe(0)
     expect(migrated.activeEvent).toBeNull()
+    expect(migrated.prestigeUpgradeLevels).toEqual({
+      cheaperRooms: 0,
+      headStart: 0,
+      staffSynergy: 0,
+      satisfactionFloor: 0,
+    })
+    expect(migrated.eventsExperienced).toBe(0)
+    expect(migrated.currentSatisfactionStreakSeconds).toBe(0)
+    expect(migrated.bestSatisfactionStreakSeconds).toBe(0)
+    expect(migrated.totalPlaytimeSeconds).toBe(0)
   })
 
   it('preserves cash and lifetime earnings across the full chain', () => {
@@ -71,33 +81,73 @@ describe('migrateSave: v2 -> v3', () => {
   })
 })
 
-describe('migrateSave: already current version', () => {
-  it('is a no-op (passthrough of validation) for a current-version save', () => {
-    const current = {
-      cash: 100,
-      totalEarned: 50,
-      lifetimeEarned: 50,
-      lastTickTimestamp: Date.now(),
-      locations: {
-        'loc-1': {
-          id: 'loc-1',
-          themeId: 'mountain',
-          floors: [{ index: 0, roomIds: [], slotCount: 4 }],
-          rooms: {},
-          staff: {},
-        },
+function v3State() {
+  return {
+    cash: 250,
+    totalEarned: 900,
+    lifetimeEarned: 900,
+    lastTickTimestamp: Date.now(),
+    locations: {
+      'loc-1': {
+        id: 'loc-1',
+        themeId: 'mountain',
+        floors: [{ index: 0, roomIds: ['r1'], slotCount: 4 }],
+        rooms: { r1: { id: 'r1', floorIndex: 0, slotIndex: 0, typeId: 'suite', status: 'occupied', builtAt: Date.now() } },
+        staff: {},
       },
-      activeLocationId: 'loc-1',
-      upgradeLevels: { marketing: 1, staffTraining: 0, concierge: 0 },
-      prestigePoints: 3,
-      prestigeCount: 1,
-      activeEvent: null,
-      unlockedAchievementIds: ['first-room'],
-      muted: false,
+    },
+    activeLocationId: 'loc-1',
+    upgradeLevels: { marketing: 1, staffTraining: 0, concierge: 0 },
+    prestigePoints: 3,
+    prestigeCount: 1,
+    activeEvent: null,
+    unlockedAchievementIds: ['first-room'],
+    muted: false,
+  }
+}
+
+describe('migrateSave: v3 -> v4', () => {
+  it('adds the prestige-perk, event-tracking, and playtime fields with sane defaults', () => {
+    const migrated = migrateSave(v3State(), 3) as Record<string, unknown>
+
+    expect(persistedStateSchema.safeParse(migrated).success).toBe(true)
+    expect(migrated.prestigeUpgradeLevels).toEqual({
+      cheaperRooms: 0,
+      headStart: 0,
+      staffSynergy: 0,
+      satisfactionFloor: 0,
+    })
+    expect(migrated.eventsExperienced).toBe(0)
+    expect(migrated.currentSatisfactionStreakSeconds).toBe(0)
+    expect(migrated.bestSatisfactionStreakSeconds).toBe(0)
+    expect(migrated.totalPlaytimeSeconds).toBe(0)
+  })
+
+  it('preserves every pre-existing field untouched', () => {
+    const migrated = migrateSave(v3State(), 3) as Record<string, unknown>
+    expect(migrated.cash).toBe(250)
+    expect(migrated.prestigePoints).toBe(3)
+    expect(migrated.prestigeCount).toBe(1)
+    expect(migrated.unlockedAchievementIds).toEqual(['first-room'])
+  })
+})
+
+describe('migrateSave: already current version', () => {
+  it('is a no-op (passthrough of validation) for a current-version (v4) save', () => {
+    const current = {
+      ...v3State(),
+      prestigeUpgradeLevels: { cheaperRooms: 2, headStart: 0, staffSynergy: 0, satisfactionFloor: 0 },
+      eventsExperienced: 5,
+      currentSatisfactionStreakSeconds: 10,
+      bestSatisfactionStreakSeconds: 120,
+      totalPlaytimeSeconds: 3000,
     }
-    const migrated = migrateSave(current, 3) as Record<string, unknown>
+    const migrated = migrateSave(current, 4) as Record<string, unknown>
     expect(persistedStateSchema.safeParse(migrated).success).toBe(true)
     expect(migrated.prestigePoints).toBe(3)
+    // A same-version load must not silently reset an already-earned perk
+    // level back to its default.
+    expect(migrated.prestigeUpgradeLevels).toEqual({ cheaperRooms: 2, headStart: 0, staffSynergy: 0, satisfactionFloor: 0 })
   })
 })
 
