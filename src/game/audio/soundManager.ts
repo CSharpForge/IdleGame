@@ -54,3 +54,7 @@ export function playCashTickSound() {
 export function playPopInSound() {
   playTone([300, 500], 0.08, 'square', 0.05)
 }
+
+export function playAchievementSound() {
+  playTone([523.25, 659.25, 783.99, 1046.5], 0.16, 'triangle', 0.08)
+}

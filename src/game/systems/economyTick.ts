@@ -1,7 +1,11 @@
-import { GUEST_SPAWN_CHANCE_PER_SEC, GUEST_STAY_SECONDS, ROOM_INCOME_PER_SEC } from '../data/roomTypes'
+import type { RoomTypeId } from '../../types/entities'
+import { GUEST_SPAWN_CHANCE_PER_SEC, GUEST_STAY_SECONDS, getRoomTypeDef } from '../data/roomTypes'
+import { incomeMultiplierFromSatisfaction, receptionistIncomeMultiplier } from './satisfaction'
 
 export interface EconomySnapshot {
-  totalRooms: number
+  roomCounts: Partial<Record<RoomTypeId, number>>
+  satisfaction: number
+  receptionistCount: number
 }
 
 export interface EconomyResult {
@@ -16,11 +20,32 @@ export interface EconomyResult {
 // with small deltas sum to exactly one call with the total delta.
 const STEADY_STATE_OCCUPANCY = Math.min(1, GUEST_SPAWN_CHANCE_PER_SEC * GUEST_STAY_SECONDS)
 
+/**
+ * Satisfaction and staffing are read at the moment this is called and
+ * treated as constant over deltaSeconds — including across an offline-catch-up
+ * gap. That's a deliberate simplification (current staffing retroactively
+ * applies to the whole away period) rather than modeling historical staffing
+ * changes, and it's what keeps this function closed-form/linear in delta.
+ */
 export function simulateEconomy(snapshot: EconomySnapshot, deltaSeconds: number): EconomyResult {
-  if (deltaSeconds <= 0 || snapshot.totalRooms <= 0) {
+  if (deltaSeconds <= 0) {
     return { incomeEarned: 0 }
   }
-  const effectiveOccupiedRooms = snapshot.totalRooms * STEADY_STATE_OCCUPANCY
-  const incomeEarned = effectiveOccupiedRooms * ROOM_INCOME_PER_SEC * deltaSeconds
+
+  let baseIncomePerSec = 0
+  for (const [typeId, count] of Object.entries(snapshot.roomCounts) as [RoomTypeId, number][]) {
+    if (!count) continue
+    baseIncomePerSec += count * getRoomTypeDef(typeId).incomePerSec
+  }
+  if (baseIncomePerSec <= 0) {
+    return { incomeEarned: 0 }
+  }
+
+  const satisfactionMultiplier = incomeMultiplierFromSatisfaction(snapshot.satisfaction)
+  const staffMultiplier = receptionistIncomeMultiplier(snapshot.receptionistCount)
+
+  const incomeEarned =
+    baseIncomePerSec * STEADY_STATE_OCCUPANCY * satisfactionMultiplier * staffMultiplier * deltaSeconds
+
   return { incomeEarned }
 }

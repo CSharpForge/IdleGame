@@ -49,6 +49,20 @@ Both layers read the same store (`src/game/state/store.ts`) via selectors; there
 
 Because both paths share one linear function, N small ticks always sum to exactly one big tick (`economyTick.test.ts` pins this down). Don't add per-room randomness or side effects to `simulateEconomy` — if guest-level granularity is ever needed for the money math itself (not just visuals), it has to stay closed-form or the online/offline consistency guarantee breaks.
 
+The snapshot passed in is `{ roomCounts: Partial<Record<RoomTypeId, number>>, satisfaction: number, receptionistCount: number }` — income sums `count × incomePerSec` across room types (`src/game/data/roomTypes.ts`), then applies a satisfaction multiplier (`src/game/systems/satisfaction.ts`, 0.6x–1.0x, floor keeps an unstaffed hotel suboptimal rather than broken) and a receptionist multiplier (diminishing returns capped at `MAX_EFFECTIVE_RECEPTIONISTS`). Satisfaction/staffing are read once per call and treated as constant over the delta — including across an offline gap — which is what keeps the function closed-form; it deliberately does not model *historical* staffing changes during time away.
+
+### Room types, staff, and satisfaction
+
+Room tiers (`standard`/`deluxe`/`suite`) are data, not code — `src/game/data/roomTypes.ts` holds cost curve, income, color, and an `unlockAtRoomCount` gate per tier, each type's cost curve independent of the others (buying more `standard` rooms doesn't raise `deluxe` prices). Staff roles (`receptionist`/`housekeeper`) work the same way via `src/game/data/staffDefs.ts`. Adding a new room tier or staff role should only ever require adding an entry to these data tables, not touching `store.ts`, `economyTick.ts`, or the 3D rendering — if it does, something is coupled that shouldn't be.
+
+### Achievements
+
+`src/game/data/achievementDefs.ts` defines each achievement as `{ id, label, description, isUnlocked(snapshot) }` — pure predicates over a small `AchievementSnapshot`, no store coupling. `getNewlyUnlockedAchievements(snapshot, alreadyUnlockedIds)` is the one function both the store's live actions (via a `checkAchievements()` closure in `createGameStore`) and `onRehydrateStorage` call after anything that could unlock one (buying a room/floor, hiring staff, ticking the economy, or a big offline catch-up) — don't duplicate the unlock-checking logic at each call site, route through this function so a new achievement only needs a new entry in the data table.
+
+### Save schema versioning is load-bearing, not decorative
+
+`persistedStateSchema` in `saveLoad.ts` is the **strict, current-version** shape — it must only be checked *after* migration. The raw `localStorage` read (`createValidatedStorage`'s `getItem`) uses a deliberately loose schema that only guards against corrupted JSON, not an outdated-but-valid shape — validating strictly at that layer would silently wipe every older save instead of letting `migrateSave` (`migrations.ts`) upgrade it. When adding a field to persisted state (as `staff`/`unlockedAchievementIds`/room `typeId` were added for M2): bump `CURRENT_SAVE_VERSION`, add a `migrateVOldToVNew` step in `migrations.ts` that fills in the new field(s) with sane defaults, and never tighten the loose storage-layer schema to require the new field.
+
 ### 3D layout (`src/scene/hotel/layout.ts`)
 
 All room/floor/guest-waypoint positions are computed from one shared grid-math module — the building renderer, guest pathing, and pop-in animation all derive positions from the same functions rather than hardcoding coordinates independently.
@@ -71,8 +85,11 @@ Static balance numbers (costs, growth curves, guest timing) live in `src/game/da
 
 Vitest + jsdom (`vitest.config.ts`). Coverage focus is business logic, not 3D rendering:
 
-- `game/systems/*.test.ts` — economy math, offline earnings, save validation
-- `game/data/roomTypes.test.ts` — cost curve properties (monotonic, positive, finite)
+- `game/systems/economyTick.test.ts`, `offlineEarnings.test.ts`, `satisfaction.test.ts` — economy/satisfaction math, including the linearity (N-small-ticks-equal-one-big-tick) property
+- `game/systems/saveLoad.test.ts` — loose storage-layer validation vs. strict post-migration schema, tested as two separate concerns (see architecture note above)
+- `game/systems/migrations.test.ts` — v1→v2 upgrade path, and the safe-fallback-to-fresh-state behavior for unfixable input
+- `game/data/roomTypes.test.ts`, `staffDefs.test.ts` — cost curve properties (monotonic, positive, finite) per room type / staff role
+- `game/data/achievementDefs.test.ts` — unlock predicates and the newly-unlocked-vs-already-recorded logic
 - `game/state/store.test.ts` — store actions, using `createGameStore()` for per-test isolation. Never test against the shared `useGameStore` singleton directly — parallel tests would pollute each other's localStorage/state.
 - `utils/formatNumber.test.ts` — display formatting edge cases
 - `game/audio/soundManager.test.ts` — audio must degrade silently with no Web Audio API (true in jsdom, and in some real locked-down browsers)

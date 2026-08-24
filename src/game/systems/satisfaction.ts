@@ -1,0 +1,31 @@
+import {
+  MAX_EFFECTIVE_RECEPTIONISTS,
+  RECEPTIONIST_INCOME_BONUS_PER_UNIT,
+  ROOMS_COVERED_PER_HOUSEKEEPER,
+} from '../data/staffDefs'
+
+const BASELINE_SATISFACTION = 0.5
+const MIN_INCOME_MULTIPLIER = 0.6
+const MAX_SATISFACTION_BONUS = 0.4
+
+/**
+ * Satisfaction is a 0..1 score with a 0.5 floor even at zero housekeeping
+ * coverage — an unstaffed hotel should feel suboptimal, not broken.
+ * Coverage scales it up toward 1 as housekeepers approach one-per-N-rooms.
+ */
+export function computeSatisfaction(totalRooms: number, housekeeperCount: number): number {
+  if (totalRooms <= 0) return 1
+  const coverage = housekeeperCount * ROOMS_COVERED_PER_HOUSEKEEPER
+  const coverageRatio = Math.min(1, coverage / totalRooms)
+  return BASELINE_SATISFACTION + coverageRatio * (1 - BASELINE_SATISFACTION)
+}
+
+export function incomeMultiplierFromSatisfaction(satisfaction: number): number {
+  const clamped = Math.max(0, Math.min(1, satisfaction))
+  return MIN_INCOME_MULTIPLIER + clamped * MAX_SATISFACTION_BONUS
+}
+
+export function receptionistIncomeMultiplier(receptionistCount: number): number {
+  const effectiveCount = Math.min(receptionistCount, MAX_EFFECTIVE_RECEPTIONISTS)
+  return 1 + effectiveCount * RECEPTIONIST_INCOME_BONUS_PER_UNIT
+}
