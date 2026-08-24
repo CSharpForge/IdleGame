@@ -21,13 +21,21 @@ function ElevatorCore({ floorCount }: { floorCount: number }) {
 }
 
 export function Building() {
-  const location = useGameStore((s) => s.activeLocation())
-  const theme = getLocationThemeDef(location.themeId)
+  // Narrow selectors rather than one `s.activeLocation()` call: a mutation
+  // to `location.staff` (hiring) has nothing to do with what Building
+  // renders, so subscribing to `floors`/`rooms`/`themeId` individually
+  // means hiring staff doesn't re-run this component at all. `rooms` still
+  // has to be selected (and does still change on every guest occupancy
+  // flip) since Room's occupied/vacant visuals flow down through here.
+  const themeId = useGameStore((s) => s.activeLocation().themeId)
+  const floors = useGameStore((s) => s.activeLocation().floors)
+  const rooms = useGameStore((s) => s.activeLocation().rooms)
+  const theme = getLocationThemeDef(themeId)
 
   // The ground plane must cover the widest floor (a floor widened by a
   // "wing" purchase extends only to the right — see layout.ts) so it never
   // shows a gap under an expanded floor's extra rooms.
-  const maxSlotCount = Math.max(ROOMS_PER_FLOOR, ...location.floors.map((f) => f.slotCount))
+  const maxSlotCount = Math.max(ROOMS_PER_FLOOR, ...floors.map((f) => f.slotCount))
   const [widestSlabW] = floorSlabSize(maxSlotCount)
   const [widestSlabX] = floorSlabPosition(0, maxSlotCount)
 
@@ -37,9 +45,9 @@ export function Building() {
         <boxGeometry args={[widestSlabW + 4, 0.1, 12]} />
         <meshStandardMaterial color={theme.groundColor} />
       </mesh>
-      <ElevatorCore floorCount={location.floors.length} />
-      {location.floors.map((floor) => (
-        <Floor key={floor.index} floor={floor} rooms={location.rooms} />
+      <ElevatorCore floorCount={floors.length} />
+      {floors.map((floor) => (
+        <Floor key={floor.index} floor={floor} rooms={rooms} />
       ))}
     </group>
   )

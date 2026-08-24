@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { animated } from '@react-spring/three'
 import { Select } from '@react-three/postprocessing'
 import type { Room as RoomData } from '../../types/entities'
@@ -11,7 +11,7 @@ import { CashBurst } from './CashBurst'
 const WINDOW_VACANT = '#2b2d42'
 const CASH_BURST_DURATION_MS = 900
 
-export function Room({ room }: { room: RoomData }) {
+function RoomImpl({ room }: { room: RoomData }) {
   const spring = useBuildPopIn(room.builtAt)
   const gradientMap = useToonGradientMap()
   const typeDef = getRoomTypeDef(room.typeId)
@@ -58,3 +58,9 @@ export function Room({ room }: { room: RoomData }) {
     </animated.group>
   )
 }
+
+// Safe with the default reference-equality comparison: Floor only ever
+// passes a specific `rooms[id]` entry down, and immer keeps that reference
+// stable for any room untouched by the current mutation (see Floor's own
+// memo comparator, which relies on the same guarantee).
+export const Room = memo(RoomImpl)

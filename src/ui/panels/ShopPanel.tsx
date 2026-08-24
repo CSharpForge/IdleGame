@@ -59,7 +59,11 @@ const cardStyle: CSSProperties = {
 
 function RoomCards() {
   const cash = useGameStore((s) => s.cash)
-  const location = useGameStore((s) => s.activeLocation())
+  // Narrow selectors instead of `s.activeLocation()`: this panel only ever
+  // needs these two derived booleans, not the whole location object (which
+  // would re-render on every staff hire or guest occupancy flip too).
+  const totalRooms = useGameStore((s) => Object.keys(s.activeLocation().rooms).length)
+  const floorHasSpace = useGameStore((s) => s.activeLocation().floors.some((f) => f.roomIds.length < f.slotCount))
   const buyRoom = useGameStore((s) => s.buyRoom)
   const buyFloor = useGameStore((s) => s.buyFloor)
   const expandFloor = useGameStore((s) => s.expandFloor)
@@ -68,8 +72,6 @@ function RoomCards() {
   const expandableFloorIndex = useGameStore((s) => s.nextExpandableFloorIndex())
   const nextWingExpansionCost = useGameStore((s) => s.nextWingExpansionCost)
 
-  const totalRooms = Object.keys(location.rooms).length
-  const floorHasSpace = location.floors.some((f) => f.roomIds.length < f.slotCount)
   const canBuyFloor = cash >= nextFloorCost
   const wingCost = expandableFloorIndex !== null ? nextWingExpansionCost(expandableFloorIndex) : null
   const canExpandWing = wingCost !== null && cash >= wingCost

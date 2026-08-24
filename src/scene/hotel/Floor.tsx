@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Edges } from '@react-three/drei'
 import type { Floor as FloorData, Room as RoomData } from '../../types/entities'
 import {
@@ -24,7 +25,7 @@ function GhostSlot({ floorIndex, slotIndex }: { floorIndex: number; slotIndex: n
   )
 }
 
-export function Floor({ floor, rooms }: { floor: FloorData; rooms: Record<string, RoomData> }) {
+function FloorImpl({ floor, rooms }: { floor: FloorData; rooms: Record<string, RoomData> }) {
   const [slabW, slabD] = floorSlabSize(floor.slotCount)
   const [slabX, slabY, slabZ] = floorSlabPosition(floor.index, floor.slotCount)
   const emptySlotIndices = Array.from(
@@ -53,3 +54,17 @@ export function Floor({ floor, rooms }: { floor: FloorData; rooms: Record<string
     </group>
   )
 }
+
+// `rooms` is the *whole location's* room record, so a plain default memo
+// comparison (which would compare that whole object by reference) would
+// still re-render every floor whenever any room anywhere changes. Immer
+// keeps floor objects referentially stable unless that specific floor's own
+// roomIds/slotCount changed, and keeps individual `rooms[id]` entries
+// stable unless that specific room changed — so comparing `floor` by
+// reference, then only this floor's own rooms, correctly scopes
+// re-renders to just the floor(s) actually affected by a purchase or a
+// guest occupancy flip.
+export const Floor = memo(FloorImpl, (prev, next) => {
+  if (prev.floor !== next.floor) return false
+  return prev.floor.roomIds.every((id) => prev.rooms[id] === next.rooms[id])
+})
