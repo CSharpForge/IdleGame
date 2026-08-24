@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   canPrestige,
   MIN_TOTAL_EARNED_TO_PRESTIGE,
+  prestigeHeadStartBonus,
   prestigeIncomeMultiplier,
   prestigePointsForTotalEarned,
+  prestigeRoomCostMultiplier,
+  prestigeSatisfactionFloorBonus,
+  prestigeStaffEffectivenessBonus,
 } from './prestige'
 
 describe('prestigePointsForTotalEarned', () => {
@@ -44,5 +48,28 @@ describe('prestigeIncomeMultiplier', () => {
 
   it('increases linearly with prestige points', () => {
     expect(prestigeIncomeMultiplier(5)).toBeCloseTo(prestigeIncomeMultiplier(0) + 5 * 0.02, 10)
+  })
+})
+
+describe('prestige perk effect functions', () => {
+  it('prestigeRoomCostMultiplier is 1.0x (no-op) at level 0 and decreases with level', () => {
+    expect(prestigeRoomCostMultiplier(0)).toBe(1)
+    expect(prestigeRoomCostMultiplier(2)).toBeLessThan(prestigeRoomCostMultiplier(1))
+    expect(prestigeRoomCostMultiplier(1)).toBeLessThan(prestigeRoomCostMultiplier(0))
+  })
+
+  it('prestigeHeadStartBonus is 0 at level 0 and increases linearly', () => {
+    expect(prestigeHeadStartBonus(0)).toBe(0)
+    expect(prestigeHeadStartBonus(3)).toBeCloseTo(prestigeHeadStartBonus(1) * 3, 10)
+  })
+
+  it('prestigeStaffEffectivenessBonus is 1.0x (no-op) at level 0 and increases with level', () => {
+    expect(prestigeStaffEffectivenessBonus(0)).toBe(1)
+    expect(prestigeStaffEffectivenessBonus(2)).toBeGreaterThan(prestigeStaffEffectivenessBonus(1))
+  })
+
+  it('prestigeSatisfactionFloorBonus is 0 at level 0 and increases linearly', () => {
+    expect(prestigeSatisfactionFloorBonus(0)).toBe(0)
+    expect(prestigeSatisfactionFloorBonus(3)).toBeCloseTo(prestigeSatisfactionFloorBonus(1) * 3, 10)
   })
 })

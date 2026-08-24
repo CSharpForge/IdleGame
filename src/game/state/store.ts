@@ -22,6 +22,12 @@ import {
 } from '../data/roomTypes'
 import { staffCost } from '../data/staffDefs'
 import { isUpgradeMaxed, upgradeCost, type UpgradeId } from '../data/upgradeDefs'
+import {
+  isPrestigeUpgradeMaxed,
+  prestigeUpgradeCost,
+  PRESTIGE_UPGRADES,
+  type PrestigeUpgradeId,
+} from '../data/prestigeUpgradeDefs'
 import { getLocationThemeDef, LOCATION_THEMES } from '../data/locationThemes'
 import { EVENTS, EVENT_SPAWN_CHANCE_PER_SEC } from '../data/eventDefs'
 import { getNewlyUnlockedAchievements, type AchievementDef } from '../data/achievementDefs'
@@ -29,7 +35,14 @@ import { simulateEconomyAcrossLocations, type EconomySnapshot } from '../systems
 import { computeOfflineEarnings } from '../systems/offlineEarnings'
 import { computeSatisfaction, managerEffectivenessMultiplier } from '../systems/satisfaction'
 import { upgradeIncomeMultiplier, upgradeSatisfactionBonus } from '../systems/upgrades'
-import { prestigeIncomeMultiplier, prestigePointsForTotalEarned } from '../systems/prestige'
+import {
+  prestigeHeadStartBonus,
+  prestigeIncomeMultiplier,
+  prestigePointsForTotalEarned,
+  prestigeRoomCostMultiplier,
+  prestigeSatisfactionFloorBonus,
+  prestigeStaffEffectivenessBonus,
+} from '../systems/prestige'
 import { eventIncomeMultiplier, isEventActive, type ActiveEvent } from '../systems/events'
 import { createValidatedStorage } from '../systems/saveLoad'
 import { CURRENT_SAVE_VERSION, migrateSave } from '../systems/migrations'
@@ -62,6 +75,7 @@ export interface GameState {
   upgradeLevels: UpgradeLevels
   prestigePoints: number
   prestigeCount: number
+  prestigeUpgradeLevels: Record<PrestigeUpgradeId, number>
   activeEvent: ActiveEvent | null
 
   unlockedAchievementIds: string[]
@@ -86,6 +100,9 @@ export interface GameState {
   nextUpgradeCost: (id: UpgradeId) => number
   isLocationUnlocked: (themeId: LocationThemeId) => boolean
   prestigePreview: () => number
+  /** Prestige points not yet spent on a permanent perk (prestigePoints itself never decreases). */
+  availablePrestigePoints: () => number
+  nextPrestigeUpgradeCost: (id: PrestigeUpgradeId) => number
   /** The lowest-index floor in the active location that's full and can still be widened, or null if none. */
   nextExpandableFloorIndex: () => number | null
   nextWingExpansionCost: (floorIndex: number) => number
@@ -96,6 +113,7 @@ export interface GameState {
   hireStaff: (role: StaffRole) => boolean
   setRoomStatus: (roomId: string, status: RoomStatus) => void
   buyUpgrade: (id: UpgradeId) => boolean
+  buyPrestigeUpgrade: (id: PrestigeUpgradeId) => boolean
   unlockLocation: (themeId: LocationThemeId) => boolean
   switchLocation: (locationId: string) => void
   prestige: () => boolean
@@ -129,22 +147,29 @@ function countByRole(staff: Record<string, StaffMember>, role: StaffRole): numbe
   return count
 }
 
-function locationSatisfaction(location: HotelLocation, conciergeBonus: number): number {
+function locationSatisfaction(
+  location: HotelLocation,
+  conciergeBonus: number,
+  staffSynergyBonus: number,
+  satisfactionFloorBonus: number,
+): number {
   const totalRooms = Object.keys(location.rooms).length
   const managerBoost = managerEffectivenessMultiplier(countByRole(location.staff, 'manager'))
-  const effectiveHousekeepers = countByRole(location.staff, 'housekeeper') * managerBoost
+  const effectiveHousekeepers = countByRole(location.staff, 'housekeeper') * managerBoost * staffSynergyBonus
   const base = computeSatisfaction(totalRooms, effectiveHousekeepers)
-  return Math.min(1, base + conciergeBonus)
+  return Math.min(1, base + conciergeBonus + satisfactionFloorBonus)
 }
 
 function buildLocationSnapshots(state: GameState): EconomySnapshot[] {
   const conciergeBonus = upgradeSatisfactionBonus(state.upgradeLevels.concierge)
+  const staffSynergyBonus = prestigeStaffEffectivenessBonus(state.prestigeUpgradeLevels.staffSynergy)
+  const satisfactionFloorBonus = prestigeSatisfactionFloorBonus(state.prestigeUpgradeLevels.satisfactionFloor)
   return Object.values(state.locations).map((location) => {
     const managerBoost = managerEffectivenessMultiplier(countByRole(location.staff, 'manager'))
     return {
       roomCounts: countByType(location.rooms),
-      satisfaction: locationSatisfaction(location, conciergeBonus),
-      receptionistCount: countByRole(location.staff, 'receptionist') * managerBoost,
+      satisfaction: locationSatisfaction(location, conciergeBonus, staffSynergyBonus, satisfactionFloorBonus),
+      receptionistCount: countByRole(location.staff, 'receptionist') * managerBoost * staffSynergyBonus,
     }
   })
 }
@@ -209,6 +234,7 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
           upgradeLevels: { marketing: 0, staffTraining: 0, concierge: 0 },
           prestigePoints: 0,
           prestigeCount: 0,
+          prestigeUpgradeLevels: { cheaperRooms: 0, headStart: 0, staffSynergy: 0, satisfactionFloor: 0 },
           activeEvent: null,
           unlockedAchievementIds: [],
           muted: false,
@@ -242,12 +268,18 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
           satisfaction: () => {
             const state = get()
             const conciergeBonus = upgradeSatisfactionBonus(state.upgradeLevels.concierge)
-            return locationSatisfaction(state.activeLocation(), conciergeBonus)
+            const staffSynergyBonus = prestigeStaffEffectivenessBonus(state.prestigeUpgradeLevels.staffSynergy)
+            const satisfactionFloorBonus = prestigeSatisfactionFloorBonus(
+              state.prestigeUpgradeLevels.satisfactionFloor,
+            )
+            return locationSatisfaction(state.activeLocation(), conciergeBonus, staffSynergyBonus, satisfactionFloorBonus)
           },
 
           nextRoomCost: (typeId) => {
-            const countOfType = countByType(get().activeLocation().rooms)[typeId] ?? 0
-            return roomCost(typeId, countOfType)
+            const state = get()
+            const countOfType = countByType(state.activeLocation().rooms)[typeId] ?? 0
+            const base = roomCost(typeId, countOfType)
+            return Math.round(base * prestigeRoomCostMultiplier(state.prestigeUpgradeLevels.cheaperRooms))
           },
 
           nextFloorCost: () => floorCost(get().activeLocation().floors.length),
@@ -259,6 +291,19 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
           isLocationUnlocked: (themeId) => Object.values(get().locations).some((l) => l.themeId === themeId),
 
           prestigePreview: () => prestigePointsForTotalEarned(get().totalEarned),
+
+          availablePrestigePoints: () => {
+            const state = get()
+            let spent = 0
+            for (const def of PRESTIGE_UPGRADES) {
+              for (let level = 0; level < state.prestigeUpgradeLevels[def.id]; level++) {
+                spent += prestigeUpgradeCost(def.id, level)
+              }
+            }
+            return state.prestigePoints - spent
+          },
+
+          nextPrestigeUpgradeCost: (id) => prestigeUpgradeCost(id, get().prestigeUpgradeLevels[id]),
 
           nextExpandableFloorIndex: () => {
             const location = get().activeLocation()
@@ -369,6 +414,20 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
             return true
           },
 
+          buyPrestigeUpgrade: (id) => {
+            const state = get()
+            const currentLevel = state.prestigeUpgradeLevels[id]
+            if (isPrestigeUpgradeMaxed(id, currentLevel)) return false
+            const cost = prestigeUpgradeCost(id, currentLevel)
+            if (state.availablePrestigePoints() < cost) return false
+            set((draft) => {
+              draft.prestigeUpgradeLevels[id] += 1
+            })
+            playPurchaseSound()
+            checkAchievements()
+            return true
+          },
+
           unlockLocation: (themeId) => {
             const state = get()
             if (state.isLocationUnlocked(themeId)) return false
@@ -404,7 +463,11 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
             set((draft) => {
               draft.prestigePoints += pointsEarned
               draft.prestigeCount += 1
-              draft.cash = 25
+              // prestigeUpgradeLevels is deliberately NOT reset here — it's a
+              // permanent perk shop, not a run-scoped upgrade like
+              // upgradeLevels below. Resetting it would make every perk
+              // one-shot, defeating the point of spending prestige points on it.
+              draft.cash = 25 + prestigeHeadStartBonus(draft.prestigeUpgradeLevels.headStart)
               draft.totalEarned = 0
               draft.upgradeLevels = { marketing: 0, staffTraining: 0, concierge: 0 }
               draft.activeEvent = null
@@ -462,6 +525,7 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
           upgradeLevels: state.upgradeLevels,
           prestigePoints: state.prestigePoints,
           prestigeCount: state.prestigeCount,
+          prestigeUpgradeLevels: state.prestigeUpgradeLevels,
           activeEvent: state.activeEvent,
           unlockedAchievementIds: state.unlockedAchievementIds,
           muted: state.muted,

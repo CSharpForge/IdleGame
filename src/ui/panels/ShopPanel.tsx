@@ -3,10 +3,11 @@ import { useGameStore } from '../../game/state/store'
 import { ROOM_TYPES } from '../../game/data/roomTypes'
 import { STAFF_ROLES } from '../../game/data/staffDefs'
 import { UPGRADES } from '../../game/data/upgradeDefs'
+import { PRESTIGE_UPGRADES } from '../../game/data/prestigeUpgradeDefs'
 import { LOCATION_THEMES } from '../../game/data/locationThemes'
 import { formatNumber } from '../../utils/formatNumber'
 
-type Tab = 'rooms' | 'staff' | 'upgrades' | 'locations'
+type Tab = 'rooms' | 'staff' | 'upgrades' | 'prestige' | 'locations'
 
 const panelStyle: CSSProperties = {
   position: 'absolute',
@@ -184,6 +185,38 @@ function UpgradeCards() {
   )
 }
 
+function PrestigeUpgradeCards() {
+  const availablePoints = useGameStore((s) => s.availablePrestigePoints())
+  const prestigeUpgradeLevels = useGameStore((s) => s.prestigeUpgradeLevels)
+  const buyPrestigeUpgrade = useGameStore((s) => s.buyPrestigeUpgrade)
+  const nextPrestigeUpgradeCost = useGameStore((s) => s.nextPrestigeUpgradeCost)
+
+  return (
+    <div style={cardRowStyle}>
+      {PRESTIGE_UPGRADES.map((def) => {
+        const level = prestigeUpgradeLevels[def.id]
+        const maxed = level >= def.maxLevel
+        const cost = nextPrestigeUpgradeCost(def.id)
+        const affordable = !maxed && availablePoints >= cost
+        return (
+          <button
+            key={def.id}
+            style={{ ...cardStyle, background: affordable ? '#f4a261' : '#8a8a8a' }}
+            disabled={!affordable}
+            onClick={() => buyPrestigeUpgrade(def.id)}
+          >
+            <span style={{ fontWeight: 700 }}>
+              {def.label} (Lv {level}/{def.maxLevel})
+            </span>
+            <span style={{ fontSize: '11px' }}>{maxed ? 'Maxed out' : def.description}</span>
+            {!maxed && <span style={{ fontSize: '12px' }}>{cost} pts</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function LocationCards() {
   const cash = useGameStore((s) => s.cash)
   const locations = useGameStore((s) => s.locations)
@@ -245,6 +278,9 @@ export function ShopPanel() {
         <button style={tabButtonStyle(tab === 'upgrades')} onClick={() => setTab('upgrades')}>
           ⭐ Upgrades
         </button>
+        <button style={tabButtonStyle(tab === 'prestige')} onClick={() => setTab('prestige')}>
+          👑 Prestige
+        </button>
         <button style={tabButtonStyle(tab === 'locations')} onClick={() => setTab('locations')}>
           🗺️ Locations
         </button>
@@ -252,6 +288,7 @@ export function ShopPanel() {
       {tab === 'rooms' && <RoomCards />}
       {tab === 'staff' && <StaffCards />}
       {tab === 'upgrades' && <UpgradeCards />}
+      {tab === 'prestige' && <PrestigeUpgradeCards />}
       {tab === 'locations' && <LocationCards />}
     </div>
   )

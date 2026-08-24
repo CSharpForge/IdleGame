@@ -396,6 +396,109 @@ describe('prestige', () => {
   })
 })
 
+describe('prestige perk shop', () => {
+  it('cannot buy a perk with zero prestige points', () => {
+    expect(store.getState().buyPrestigeUpgrade('headStart')).toBe(false)
+  })
+
+  it('buying a perk increases its level and decreases available (but not total) points', () => {
+    store.setState({ cash: 1_000_000, totalEarned: MIN_TOTAL_EARNED_TO_PRESTIGE * 100 })
+    store.getState().prestige()
+    const totalPoints = store.getState().prestigePoints
+    const cost = store.getState().nextPrestigeUpgradeCost('headStart')
+
+    const bought = store.getState().buyPrestigeUpgrade('headStart')
+
+    expect(bought).toBe(true)
+    expect(store.getState().prestigeUpgradeLevels.headStart).toBe(1)
+    // Spending must never decrement prestigePoints itself — it also drives
+    // the permanent income multiplier, so decrementing it would silently
+    // shrink that multiplier.
+    expect(store.getState().prestigePoints).toBe(totalPoints)
+    expect(store.getState().availablePrestigePoints()).toBe(totalPoints - cost)
+  })
+
+  it('fails once available points are exhausted', () => {
+    store.setState({ cash: 1_000_000, totalEarned: MIN_TOTAL_EARNED_TO_PRESTIGE * 4 })
+    store.getState().prestige()
+    let guard = 0
+    while (store.getState().buyPrestigeUpgrade('headStart') && guard < 50) guard++
+    const levelAtExhaustion = store.getState().prestigeUpgradeLevels.headStart
+    expect(store.getState().buyPrestigeUpgrade('headStart')).toBe(false)
+    expect(store.getState().prestigeUpgradeLevels.headStart).toBe(levelAtExhaustion)
+  })
+
+  it('fails once a perk hits its max level, even with points to spare', () => {
+    store.setState({ cash: 1_000_000, totalEarned: MIN_TOTAL_EARNED_TO_PRESTIGE * 1e6 })
+    store.getState().prestige()
+    // Ample points from the huge totalEarned above — this should hit
+    // headStart's maxLevel (10) well before running out of points.
+    for (let i = 0; i < 15; i++) store.getState().buyPrestigeUpgrade('headStart')
+    expect(store.getState().prestigeUpgradeLevels.headStart).toBe(10)
+    expect(store.getState().buyPrestigeUpgrade('headStart')).toBe(false)
+  })
+
+  it('prestige() does not reset prestigeUpgradeLevels (they are permanent)', () => {
+    store.setState({ cash: 1_000_000, totalEarned: MIN_TOTAL_EARNED_TO_PRESTIGE * 100 })
+    store.getState().prestige()
+    store.getState().buyPrestigeUpgrade('headStart')
+    expect(store.getState().prestigeUpgradeLevels.headStart).toBe(1)
+
+    store.setState({ cash: 1_000_000, totalEarned: MIN_TOTAL_EARNED_TO_PRESTIGE * 400 })
+    store.getState().prestige()
+
+    expect(store.getState().prestigeUpgradeLevels.headStart).toBe(1)
+  })
+
+  it('headStart perk grants extra starting cash on the next prestige', () => {
+    store.setState({ cash: 1_000_000, totalEarned: MIN_TOTAL_EARNED_TO_PRESTIGE * 100 })
+    store.getState().prestige()
+    store.getState().buyPrestigeUpgrade('headStart')
+
+    store.setState({ cash: 1_000_000, totalEarned: MIN_TOTAL_EARNED_TO_PRESTIGE * 400 })
+    store.getState().prestige()
+
+    expect(store.getState().cash).toBeGreaterThan(25)
+  })
+
+  it('cheaperRooms perk lowers room cost', () => {
+    store.setState({ cash: 1_000_000, totalEarned: MIN_TOTAL_EARNED_TO_PRESTIGE * 100 })
+    store.getState().prestige()
+    const costBefore = store.getState().nextRoomCost('standard')
+    // Buy a few levels — at level 1 the 3% discount on a cheap early room
+    // rounds away to nothing, so this needs enough levels to show up.
+    store.getState().buyPrestigeUpgrade('cheaperRooms')
+    store.getState().buyPrestigeUpgrade('cheaperRooms')
+    store.getState().buyPrestigeUpgrade('cheaperRooms')
+    const costAfter = store.getState().nextRoomCost('standard')
+    expect(costAfter).toBeLessThan(costBefore)
+  })
+
+  it('satisfactionFloor perk raises satisfaction with no staff at all', () => {
+    store.setState({ cash: 1_000_000, totalEarned: MIN_TOTAL_EARNED_TO_PRESTIGE * 100 })
+    store.getState().prestige()
+    store.setState({ cash: 1_000_000 })
+    store.getState().buyRoom('standard')
+    const before = store.getState().satisfaction()
+    store.getState().buyPrestigeUpgrade('satisfactionFloor')
+    expect(store.getState().satisfaction()).toBeGreaterThan(before)
+  })
+
+  it('staffSynergy perk amplifies an existing housekeeper\'s satisfaction boost', () => {
+    store.setState({ cash: 1_000_000, totalEarned: MIN_TOTAL_EARNED_TO_PRESTIGE * 100 })
+    store.getState().prestige()
+    store.setState({ cash: 1_000_000 })
+    for (let i = 0; i < 8; i++) {
+      store.getState().buyRoom('standard')
+      if (i % 4 === 3) store.getState().buyFloor()
+    }
+    store.getState().hireStaff('housekeeper')
+    const before = store.getState().satisfaction()
+    store.getState().buyPrestigeUpgrade('staffSynergy')
+    expect(store.getState().satisfaction()).toBeGreaterThan(before)
+  })
+})
+
 describe('tickEconomy', () => {
   it('adds income proportional to room count and delta, and advances lastTickTimestamp', () => {
     store.setState({ cash: 1_000_000 })
