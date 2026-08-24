@@ -1,33 +1,57 @@
-import { memo } from 'react'
-import { Edges } from '@react-three/drei'
+import { memo, useEffect, useMemo } from 'react'
+import { useThree } from '@react-three/fiber'
+import * as THREE from 'three'
+import { LineMaterial, LineSegments2, LineSegmentsGeometry } from 'three-stdlib'
 import type { Floor as FloorData, Room as RoomData } from '../../types/entities'
-import {
-  ROOM_DEPTH,
-  ROOM_HEIGHT,
-  ROOM_WIDTH,
-  floorBaseY,
-  floorSlabPosition,
-  floorSlabSize,
-  roomCenterPosition,
-} from './layout'
+import { ROOM_DEPTH, ROOM_HEIGHT, ROOM_WIDTH, roomCenterPosition } from './layout'
 import { Room } from './Room'
+
+// Every ghost slot (an empty, not-yet-bought room slot) is the exact same
+// size, so the wireframe outline geometry/material are computed once here
+// and shared by every instance — each GhostSlot only creates its own
+// LineSegments2 *object* (cheap: just a transform), not its own geometry
+// buffer or material. This is a fat-line (Line2) pair, matching drei's
+// <Edges> exactly (same three-stdlib classes it uses internally), so the
+// visual result is identical — just without recomputing/re-uploading the
+// same edge geometry once per ghost slot.
+const GHOST_EDGES_GEOMETRY = (() => {
+  const box = new THREE.BoxGeometry(ROOM_WIDTH - 0.15, ROOM_HEIGHT, ROOM_DEPTH - 0.15)
+  const edges = new THREE.EdgesGeometry(box)
+  const geometry = new LineSegmentsGeometry()
+  geometry.setPositions(Array.from(edges.attributes.position.array))
+  box.dispose()
+  edges.dispose()
+  return geometry
+})()
+
+const GHOST_EDGES_MATERIAL = new LineMaterial({ color: 0x8a8a8a })
 
 function GhostSlot({ floorIndex, slotIndex }: { floorIndex: number; slotIndex: number }) {
   const position = roomCenterPosition(floorIndex, slotIndex)
-  return (
-    <group position={position}>
-      <mesh>
-        <boxGeometry args={[ROOM_WIDTH - 0.15, ROOM_HEIGHT, ROOM_DEPTH - 0.15]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-        <Edges color="#8a8a8a" />
-      </mesh>
-    </group>
-  )
+  const size = useThree((state) => state.size)
+
+  // Fat lines (Line2) render their width relative to `resolution`, in
+  // screen pixels — since GHOST_EDGES_MATERIAL is one shared singleton
+  // (not per-instance), its resolution needs to be kept in sync with the
+  // canvas size from somewhere; doing it here is redundant across ghost
+  // slots but idempotent and cheap (just a Vector2 set).
+  useEffect(() => {
+    GHOST_EDGES_MATERIAL.resolution.set(size.width, size.height)
+  }, [size])
+
+  // One Object3D per ghost slot is unavoidable (each needs its own
+  // position), but it reuses the shared geometry/material buffers above
+  // rather than owning its own copy.
+  const line = useMemo(() => {
+    const instance = new LineSegments2(GHOST_EDGES_GEOMETRY, GHOST_EDGES_MATERIAL)
+    instance.computeLineDistances()
+    return instance
+  }, [])
+
+  return <primitive object={line} position={position} />
 }
 
 function FloorImpl({ floor, rooms }: { floor: FloorData; rooms: Record<string, RoomData> }) {
-  const [slabW, slabD] = floorSlabSize(floor.slotCount)
-  const [slabX, slabY, slabZ] = floorSlabPosition(floor.index, floor.slotCount)
   const emptySlotIndices = Array.from(
     { length: floor.slotCount - floor.roomIds.length },
     (_, i) => floor.roomIds.length + i,
@@ -35,14 +59,6 @@ function FloorImpl({ floor, rooms }: { floor: FloorData; rooms: Record<string, R
 
   return (
     <group>
-      <mesh position={[slabX, slabY, slabZ]} receiveShadow>
-        <boxGeometry args={[slabW, 0.2, slabD]} />
-        <meshStandardMaterial color="#d9c9a3" />
-      </mesh>
-      <mesh position={[slabX, floorBaseY(floor.index) + 0.35, 1.15]} receiveShadow castShadow>
-        <boxGeometry args={[slabW, 0.7, 0.08]} />
-        <meshStandardMaterial color="#c2b28f" />
-      </mesh>
       {floor.roomIds.map((roomId) => {
         const room = rooms[roomId]
         if (!room) return null
