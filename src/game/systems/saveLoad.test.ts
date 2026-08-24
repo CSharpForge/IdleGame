@@ -40,8 +40,14 @@ function validPersistedValue() {
       totalPlaytimeSeconds: 0,
       unlockedAchievementIds: [],
       muted: false,
+      qualityOverride: 'auto',
+      requestsFulfilledTotal: 0,
+      lastLoginDate: null,
+      loginStreakDays: 0,
+      longestLoginStreakDays: 0,
+      tutorialCompleted: false,
     },
-    version: 4,
+    version: 5,
   }
 }
 
@@ -167,5 +173,25 @@ describe('persistedStateSchema (strict, post-migration check)', () => {
     // Regression guard: widening the typeId/role enums for penthouse/manager
     // must not require existing saves to have them.
     expect(persistedStateSchema.safeParse(validPersistedValue().state).success).toBe(true)
+  })
+
+  it('accepts an executiveSuite room', () => {
+    const value = validPersistedValue()
+    value.state.locations['loc-1'].rooms['room-1'].typeId = 'executiveSuite'
+    expect(persistedStateSchema.safeParse(value.state).success).toBe(true)
+  })
+
+  it('rejects an invalid qualityOverride value', () => {
+    const value = validPersistedValue()
+    value.state.qualityOverride = 'ultra'
+    expect(persistedStateSchema.safeParse(value.state).success).toBe(false)
+  })
+
+  it('accepts each valid qualityOverride value', () => {
+    for (const override of ['auto', 'high', 'low'] as const) {
+      const value = validPersistedValue()
+      value.state.qualityOverride = override
+      expect(persistedStateSchema.safeParse(value.state).success).toBe(true)
+    }
   })
 })

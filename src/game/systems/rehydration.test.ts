@@ -31,6 +31,12 @@ function makePersistedState(overrides: Partial<PersistedState> = {}): PersistedS
     totalPlaytimeSeconds: 0,
     unlockedAchievementIds: [],
     muted: false,
+    qualityOverride: 'auto',
+    requestsFulfilledTotal: 0,
+    lastLoginDate: null,
+    loginStreakDays: 0,
+    longestLoginStreakDays: 0,
+    tutorialCompleted: true,
     ...overrides,
   }
 }
@@ -91,4 +97,70 @@ describe('computeRehydratedState', () => {
 
     expect(result.lastTickTimestamp).toBe(now)
   })
+})
+
+describe('computeRehydratedState: daily login streak', () => {
+  const DAY = 24 * 60 * 60 * 1000
+
+  it("a brand-new save's first-ever session starts the streak silently, with no reward popup", () => {
+    const now = Date.now()
+    const saved = makePersistedState({ lastLoginDate: null, loginStreakDays: 0 })
+
+    const result = computeRehydratedState(saved, now)
+
+    expect(result.loginStreakDays).toBe(1)
+    expect(result.longestLoginStreakDays).toBe(1)
+    expect(result.pendingDailyReward).toBeNull()
+    expect(result.cash).toBe(saved.cash)
+  })
+
+  it('logging in again the same UTC day grants nothing and leaves the streak unchanged', () => {
+    const now = Date.now()
+    const saved = makePersistedState({ lastLoginDate: utcKey(now), loginStreakDays: 3, longestLoginStreakDays: 3 })
+
+    const result = computeRehydratedState(saved, now)
+
+    expect(result.loginStreakDays).toBe(3)
+    expect(result.pendingDailyReward).toBeNull()
+    expect(result.cash).toBe(saved.cash)
+  })
+
+  it('a returning player on a consecutive day gets a reward and an incremented streak', () => {
+    const now = Date.now()
+    const saved = makePersistedState({
+      lastLoginDate: utcKey(now - DAY),
+      loginStreakDays: 2,
+      longestLoginStreakDays: 2,
+      lastTickTimestamp: now - 1000, // short gap, avoids also triggering offline earnings
+    })
+
+    const result = computeRehydratedState(saved, now)
+
+    expect(result.loginStreakDays).toBe(3)
+    expect(result.longestLoginStreakDays).toBe(3)
+    expect(result.pendingDailyReward).toEqual({ streakDay: 3, cashAmount: expect.any(Number) })
+    expect(result.pendingDailyReward!.cashAmount).toBeGreaterThan(0)
+    expect(result.cash).toBe(saved.cash + result.pendingDailyReward!.cashAmount)
+  })
+
+  it('missing a day resets the streak to 1 but still grants the day-1 reward', () => {
+    const now = Date.now()
+    const saved = makePersistedState({
+      lastLoginDate: utcKey(now - 5 * DAY),
+      loginStreakDays: 6,
+      longestLoginStreakDays: 6,
+      lastTickTimestamp: now - 1000,
+    })
+
+    const result = computeRehydratedState(saved, now)
+
+    expect(result.loginStreakDays).toBe(1)
+    // longest streak is a high-water mark — a reset never lowers it.
+    expect(result.longestLoginStreakDays).toBe(6)
+    expect(result.pendingDailyReward?.streakDay).toBe(1)
+  })
+
+  function utcKey(ms: number): string {
+    return new Date(ms).toISOString().slice(0, 10)
+  }
 })

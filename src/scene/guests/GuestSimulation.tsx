@@ -4,6 +4,7 @@ import { createReactAPI, useEntities } from 'miniplex-react'
 import { guestWorld, spawnGuest } from '../../game/ecs/world'
 import { useGameStore } from '../../game/state/store'
 import { GUEST_SPAWN_CHANCE_PER_SEC } from '../../game/data/roomTypes'
+import { GUEST_REQUEST_CHANCE_PER_SEC } from '../../game/data/guestRequestDefs'
 import { useQualityTier } from '../qualityTier'
 import { GuestAgent } from './GuestAgent'
 
@@ -37,10 +38,32 @@ function GuestSpawnerAndReaper() {
     const stepSeconds = claimCheckAccumulator.current
     claimCheckAccumulator.current = 0
 
+    const storeApi = useGameStore.getState()
+    const { floors, rooms } = storeApi.activeLocation()
+
+    // Guest requests: rolled here (not per-GuestAgent) to reuse this same
+    // ~5/sec throttle instead of every occupied room's guest independently
+    // running its own RNG check every frame. Expire stale ones first so a
+    // request that timed out doesn't linger as a stuck HUD tray entry.
+    const activeGuestRequests = storeApi.activeGuestRequests
+    for (const roomId of Object.keys(activeGuestRequests)) {
+      if (activeGuestRequests[roomId].expiresAt < Date.now()) {
+        storeApi.expireGuestRequest(roomId)
+      }
+    }
+    for (const floor of floors) {
+      for (const roomId of floor.roomIds) {
+        const room = rooms[roomId]
+        if (!room || room.status !== 'occupied' || activeGuestRequests[roomId]) continue
+        if (Math.random() < GUEST_REQUEST_CHANCE_PER_SEC * stepSeconds) {
+          storeApi.raiseGuestRequest(roomId)
+        }
+      }
+    }
+
     const liveEntities = guestWorld.entities.filter((e) => e.phase !== 'done')
     if (liveEntities.length >= maxConcurrentGuests) return
 
-    const { floors, rooms } = useGameStore.getState().activeLocation()
     const claimedRoomIds = new Set(liveEntities.map((e) => e.roomId))
 
     for (const floor of floors) {

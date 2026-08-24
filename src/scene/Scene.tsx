@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo } from 'react'
 import { OrbitControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { EffectComposer, Outline, Selection } from '@react-three/postprocessing'
@@ -14,10 +14,11 @@ export function Scene() {
   const themeId = useGameStore((s) => s.activeLocation().themeId)
   const theme = getLocationThemeDef(themeId)
   const gl = useThree((state) => state.gl)
-  // Computed once per mount, same as the outlineSupported state this
-  // replaces — the renderer's software-vs-hardware nature doesn't change
-  // mid-session, so there's nothing to react to here.
-  const [tier] = useState(() => getQualityTier(gl))
+  const qualityOverride = useGameStore((s) => s.qualityOverride)
+  // Reactive (not a one-time useState): the renderer's software-vs-hardware
+  // nature never changes mid-session, but qualityOverride can, via the
+  // Settings quality toggle — so this has to recompute when it changes.
+  const tier = useMemo(() => getQualityTier(gl, qualityOverride), [gl, qualityOverride])
 
   return (
     <QualityTierProvider tier={tier}>

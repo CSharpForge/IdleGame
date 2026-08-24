@@ -29,6 +29,12 @@ function makePersistedState(overrides: Partial<PersistedState> = {}): PersistedS
     totalPlaytimeSeconds: 0,
     unlockedAchievementIds: [],
     muted: false,
+    qualityOverride: 'auto',
+    requestsFulfilledTotal: 0,
+    lastLoginDate: null,
+    loginStreakDays: 0,
+    longestLoginStreakDays: 0,
+    tutorialCompleted: true,
     ...overrides,
   }
 }

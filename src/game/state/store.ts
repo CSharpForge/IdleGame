@@ -23,6 +23,8 @@ import {
 import { getLocationThemeDef, LOCATION_THEMES } from '../data/locationThemes'
 import { EVENTS, EVENT_SPAWN_CHANCE_PER_SEC } from '../data/eventDefs'
 import { getNewlyUnlockedAchievements, type AchievementDef } from '../data/achievementDefs'
+import { getGuestRequestDef, randomGuestRequestDef } from '../data/guestRequestDefs'
+import type { QualityOverride } from '../../scene/materials/rendererCapabilities'
 import { simulateEconomyAcrossLocations } from '../systems/economyTick'
 import {
   buildAchievementSnapshot,
@@ -92,9 +94,23 @@ export interface GameState {
 
   unlockedAchievementIds: string[]
   muted: boolean
+  qualityOverride: QualityOverride
+
+  requestsFulfilledTotal: number
+  /** Runtime-only, keyed by roomId — never persisted (ECS-adjacent, like a guest's phase). */
+  activeGuestRequests: Record<string, { roomId: string; defId: string; expiresAt: number }>
+
+  lastLoginDate: string | null
+  loginStreakDays: number
+  longestLoginStreakDays: number
+
+  tutorialCompleted: boolean
 
   pendingOfflineEarnings: OfflineEarningsSummary | null
   dismissOfflineEarnings: () => void
+
+  pendingDailyReward: { streakDay: number; cashAmount: number } | null
+  dismissDailyReward: () => void
 
   pendingAchievements: AchievementDef[]
   dismissTopAchievement: () => void
@@ -131,6 +147,13 @@ export interface GameState {
   prestige: () => boolean
   tickEconomy: (deltaSeconds: number) => void
   toggleMuted: () => void
+  setQualityOverride: (value: QualityOverride) => void
+
+  raiseGuestRequest: (roomId: string) => void
+  expireGuestRequest: (roomId: string) => void
+  fulfillGuestRequest: (roomId: string) => boolean
+
+  completeTutorial: () => void
 }
 
 function makeStarterLocation(id: string): HotelLocation {
@@ -175,6 +198,12 @@ export function toPersistedState(state: GameState): PersistedState {
     totalPlaytimeSeconds: state.totalPlaytimeSeconds,
     unlockedAchievementIds: state.unlockedAchievementIds,
     muted: state.muted,
+    qualityOverride: state.qualityOverride,
+    requestsFulfilledTotal: state.requestsFulfilledTotal,
+    lastLoginDate: state.lastLoginDate,
+    loginStreakDays: state.loginStreakDays,
+    longestLoginStreakDays: state.longestLoginStreakDays,
+    tutorialCompleted: state.tutorialCompleted,
   }
 }
 
@@ -224,12 +253,25 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
           totalPlaytimeSeconds: 0,
           unlockedAchievementIds: [],
           muted: false,
+          qualityOverride: 'auto',
+          requestsFulfilledTotal: 0,
+          activeGuestRequests: {},
+          lastLoginDate: null,
+          loginStreakDays: 0,
+          longestLoginStreakDays: 0,
+          tutorialCompleted: false,
           pendingOfflineEarnings: null,
+          pendingDailyReward: null,
           pendingAchievements: [],
 
           dismissOfflineEarnings: () =>
             set((state) => {
               state.pendingOfflineEarnings = null
+            }),
+
+          dismissDailyReward: () =>
+            set((state) => {
+              state.pendingDailyReward = null
             }),
 
           dismissTopAchievement: () =>
@@ -537,6 +579,46 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
             set((draft) => {
               draft.muted = !draft.muted
             }),
+
+          setQualityOverride: (value) =>
+            set((draft) => {
+              draft.qualityOverride = value
+            }),
+
+          raiseGuestRequest: (roomId) =>
+            set((draft) => {
+              if (draft.activeGuestRequests[roomId]) return
+              const def = randomGuestRequestDef()
+              draft.activeGuestRequests[roomId] = {
+                roomId,
+                defId: def.id,
+                expiresAt: Date.now() + def.windowSeconds * 1000,
+              }
+            }),
+
+          expireGuestRequest: (roomId) =>
+            set((draft) => {
+              delete draft.activeGuestRequests[roomId]
+            }),
+
+          fulfillGuestRequest: (roomId) => {
+            const state = get()
+            const request = state.activeGuestRequests[roomId]
+            if (!request || request.expiresAt < Date.now()) return false
+            const def = getGuestRequestDef(request.defId)
+            set((draft) => {
+              draft.cash += def.bonusCash
+              draft.requestsFulfilledTotal += 1
+              delete draft.activeGuestRequests[roomId]
+            })
+            checkAchievements()
+            return true
+          },
+
+          completeTutorial: () =>
+            set((draft) => {
+              draft.tutorialCompleted = true
+            }),
         }
       }),
       {
@@ -556,6 +638,12 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
           state.lifetimeEarned = result.lifetimeEarned
           if (result.pendingOfflineEarnings) {
             state.pendingOfflineEarnings = result.pendingOfflineEarnings
+          }
+          state.lastLoginDate = result.lastLoginDate
+          state.loginStreakDays = result.loginStreakDays
+          state.longestLoginStreakDays = result.longestLoginStreakDays
+          if (result.pendingDailyReward) {
+            state.pendingDailyReward = result.pendingDailyReward
           }
           if (result.newlyUnlockedAchievements.length > 0) {
             state.unlockedAchievementIds = result.unlockedAchievementIds

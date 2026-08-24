@@ -15,6 +15,8 @@ const emptySnapshot = {
   eventsExperienced: 0,
   bestSatisfactionStreakSeconds: 0,
   totalPlaytimeSeconds: 0,
+  requestsFulfilledTotal: 0,
+  longestLoginStreakDays: 0,
 }
 
 describe('ACHIEVEMENTS', () => {
@@ -56,6 +58,8 @@ describe('getNewlyUnlockedAchievements', () => {
       eventsExperienced: 5,
       bestSatisfactionStreakSeconds: 300,
       totalPlaytimeSeconds: 3600,
+      requestsFulfilledTotal: 20,
+      longestLoginStreakDays: 7,
     }
     const newly = getNewlyUnlockedAchievements(snapshot, [])
     const ids = newly.map((a) => a.id)
@@ -75,6 +79,8 @@ describe('getNewlyUnlockedAchievements', () => {
         'party-goer',
         'five-star-streak',
         'dedicated-owner',
+        'guest-whisperer',
+        'loyal-guestkeeper',
       ]),
     )
   })
@@ -108,6 +114,8 @@ describe('getNewlyUnlockedAchievements', () => {
       eventsExperienced: 999,
       bestSatisfactionStreakSeconds: 99_999,
       totalPlaytimeSeconds: 999_999,
+      requestsFulfilledTotal: 999,
+      longestLoginStreakDays: 999,
     }
     const allIds = ACHIEVEMENTS.map((a) => a.id)
     expect(getNewlyUnlockedAchievements(snapshot, allIds)).toEqual([])

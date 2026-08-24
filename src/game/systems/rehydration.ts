@@ -1,6 +1,8 @@
 import type { AchievementDef } from '../data/achievementDefs'
 import { getNewlyUnlockedAchievements } from '../data/achievementDefs'
+import { dailyRewardForStreakDay } from '../data/dailyRewardDefs'
 import { buildAchievementSnapshot, buildLocationSnapshots } from './locationStats'
+import { computeLoginStreak, utcDateKey } from './dailyRewards'
 import { computeOfflineEarnings } from './offlineEarnings'
 import { eventIncomeMultiplier, isEventActive, type ActiveEvent } from './events'
 import { prestigeIncomeMultiplier } from './prestige'
@@ -16,6 +18,10 @@ export interface RehydrationResult {
   pendingOfflineEarnings: { incomeEarned: number; elapsedSeconds: number } | null
   unlockedAchievementIds: string[]
   newlyUnlockedAchievements: AchievementDef[]
+  lastLoginDate: string
+  loginStreakDays: number
+  longestLoginStreakDays: number
+  pendingDailyReward: { streakDay: number; cashAmount: number } | null
 }
 
 /**
@@ -50,8 +56,37 @@ export function computeRehydratedState(saved: PersistedState, now: number = Date
     pendingOfflineEarnings = { incomeEarned, elapsedSeconds }
   }
 
+  // Daily login streak: same treatment as offline earnings above — the
+  // reward is granted immediately (folded into cash/totalEarned/
+  // lifetimeEarned right here), and `pendingDailyReward` is purely a flag
+  // telling the UI to announce what was already applied, not a gate the UI
+  // has to "claim" through separately.
+  const loginStreak = computeLoginStreak(saved.lastLoginDate, saved.loginStreakDays, now)
+  let lastLoginDate = saved.lastLoginDate ?? utcDateKey(now)
+  let loginStreakDays = saved.loginStreakDays
+  let longestLoginStreakDays = saved.longestLoginStreakDays
+  let pendingDailyReward: RehydrationResult['pendingDailyReward'] = null
+
+  if (loginStreak.isNewDay) {
+    lastLoginDate = utcDateKey(now)
+    loginStreakDays = loginStreak.newStreakDay
+    if (loginStreakDays > longestLoginStreakDays) longestLoginStreakDays = loginStreakDays
+
+    // Only grant/announce a reward for a *returning* player. A brand-new
+    // save (saved.lastLoginDate still null) silently starts the streak at
+    // day 1 instead of popping a reward modal on top of the first-run
+    // tutorial during someone's very first session.
+    if (saved.lastLoginDate !== null) {
+      const reward = dailyRewardForStreakDay(loginStreakDays)
+      cash += reward.cashAmount
+      totalEarned += reward.cashAmount
+      lifetimeEarned += reward.cashAmount
+      pendingDailyReward = { streakDay: loginStreakDays, cashAmount: reward.cashAmount }
+    }
+  }
+
   const newlyUnlockedAchievements = getNewlyUnlockedAchievements(
-    buildAchievementSnapshot({ ...saved, lifetimeEarned }),
+    buildAchievementSnapshot({ ...saved, lifetimeEarned, longestLoginStreakDays }),
     saved.unlockedAchievementIds,
   )
   const unlockedAchievementIds =
@@ -68,5 +103,9 @@ export function computeRehydratedState(saved: PersistedState, now: number = Date
     pendingOfflineEarnings,
     unlockedAchievementIds,
     newlyUnlockedAchievements,
+    lastLoginDate,
+    loginStreakDays,
+    longestLoginStreakDays,
+    pendingDailyReward,
   }
 }

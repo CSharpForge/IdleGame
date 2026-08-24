@@ -57,6 +57,20 @@ export const ROOM_TYPES: RoomTypeDef[] = [
     heightScale: 1.45,
     unlockAtRoomCount: 28,
   },
+  {
+    id: 'executiveSuite',
+    label: 'Executive Suite',
+    baseCost: 8000,
+    costGrowth: 1.22,
+    incomePerSec: 58,
+    color: '#1d3557',
+    windowColor: '#f1faee',
+    // Stays under FLOOR_HEIGHT's clearance ceiling (see layout.ts's
+    // FLOOR_HEIGHT comment: room top = ROOM_HEIGHT * heightScale must clear
+    // FLOOR_HEIGHT - 0.1). 1.5 leaves ~0.15 margin, same order as Penthouse's.
+    heightScale: 1.5,
+    unlockAtRoomCount: 50,
+  },
 ]
 
 export function getRoomTypeDef(id: RoomTypeId): RoomTypeDef {

@@ -132,22 +132,66 @@ describe('migrateSave: v3 -> v4', () => {
   })
 })
 
+function v4State() {
+  return {
+    ...v3State(),
+    prestigeUpgradeLevels: { cheaperRooms: 2, headStart: 0, staffSynergy: 0, satisfactionFloor: 0 },
+    eventsExperienced: 5,
+    currentSatisfactionStreakSeconds: 10,
+    bestSatisfactionStreakSeconds: 120,
+    totalPlaytimeSeconds: 3000,
+  }
+}
+
+describe('migrateSave: v4 -> v5', () => {
+  it('adds the quality-override, guest-request, and login-streak fields with sane defaults', () => {
+    const migrated = migrateSave(v4State(), 4) as Record<string, unknown>
+
+    expect(persistedStateSchema.safeParse(migrated).success).toBe(true)
+    expect(migrated.qualityOverride).toBe('auto')
+    expect(migrated.requestsFulfilledTotal).toBe(0)
+    expect(migrated.lastLoginDate).toBeNull()
+    expect(migrated.loginStreakDays).toBe(0)
+    expect(migrated.longestLoginStreakDays).toBe(0)
+  })
+
+  it('defaults tutorialCompleted to true for a pre-existing save (asymmetric vs. freshDefaultState)', () => {
+    // A returning player upgrading from a pre-v5 save must never see a
+    // beginner tutorial retroactively — unlike freshDefaultState(), which
+    // defaults tutorialCompleted to false for a genuinely new save.
+    const migrated = migrateSave(v4State(), 4) as Record<string, unknown>
+    expect(migrated.tutorialCompleted).toBe(true)
+  })
+
+  it('preserves every pre-existing v4 field untouched', () => {
+    const migrated = migrateSave(v4State(), 4) as Record<string, unknown>
+    expect(migrated.prestigePoints).toBe(3)
+    expect(migrated.prestigeUpgradeLevels).toEqual({ cheaperRooms: 2, headStart: 0, staffSynergy: 0, satisfactionFloor: 0 })
+    expect(migrated.eventsExperienced).toBe(5)
+  })
+})
+
 describe('migrateSave: already current version', () => {
-  it('is a no-op (passthrough of validation) for a current-version (v4) save', () => {
+  it('is a no-op (passthrough of validation) for a current-version (v5) save', () => {
     const current = {
-      ...v3State(),
-      prestigeUpgradeLevels: { cheaperRooms: 2, headStart: 0, staffSynergy: 0, satisfactionFloor: 0 },
-      eventsExperienced: 5,
-      currentSatisfactionStreakSeconds: 10,
-      bestSatisfactionStreakSeconds: 120,
-      totalPlaytimeSeconds: 3000,
+      ...v4State(),
+      qualityOverride: 'high',
+      requestsFulfilledTotal: 12,
+      lastLoginDate: '2026-08-24',
+      loginStreakDays: 3,
+      longestLoginStreakDays: 9,
+      tutorialCompleted: true,
     }
-    const migrated = migrateSave(current, 4) as Record<string, unknown>
+    const migrated = migrateSave(current, 5) as Record<string, unknown>
     expect(persistedStateSchema.safeParse(migrated).success).toBe(true)
     expect(migrated.prestigePoints).toBe(3)
     // A same-version load must not silently reset an already-earned perk
     // level back to its default.
     expect(migrated.prestigeUpgradeLevels).toEqual({ cheaperRooms: 2, headStart: 0, staffSynergy: 0, satisfactionFloor: 0 })
+    // ...nor a live quality preference / streak / request tally.
+    expect(migrated.qualityOverride).toBe('high')
+    expect(migrated.requestsFulfilledTotal).toBe(12)
+    expect(migrated.loginStreakDays).toBe(3)
   })
 })
 

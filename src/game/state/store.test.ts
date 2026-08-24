@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createGameStore, type GameState } from './store'
 import type { StoreApi, UseBoundStore } from 'zustand'
 import { MIN_TOTAL_EARNED_TO_PRESTIGE } from '../systems/prestige'
+import { GUEST_REQUESTS } from '../data/guestRequestDefs'
 
 let store: UseBoundStore<StoreApi<GameState>>
 let keySuffix = 0
@@ -847,5 +848,166 @@ describe('playtime, satisfaction streak, and eventsExperienced tracking', () => 
     // increment the counter again.
     store.getState().tickEconomy(1)
     expect(store.getState().eventsExperienced).toBe(1)
+  })
+})
+
+describe('quality override', () => {
+  it('defaults to auto and can be changed', () => {
+    expect(store.getState().qualityOverride).toBe('auto')
+    store.getState().setQualityOverride('low')
+    expect(store.getState().qualityOverride).toBe('low')
+    store.getState().setQualityOverride('high')
+    expect(store.getState().qualityOverride).toBe('high')
+  })
+})
+
+describe('guest requests', () => {
+  it('raiseGuestRequest creates a pending request for that room', () => {
+    store.getState().raiseGuestRequest('room-1')
+    const request = store.getState().activeGuestRequests['room-1']
+    expect(request).toBeDefined()
+    expect(request.roomId).toBe('room-1')
+  })
+
+  it('raiseGuestRequest does not overwrite an already-pending request for the same room', () => {
+    store.getState().raiseGuestRequest('room-1')
+    const first = store.getState().activeGuestRequests['room-1']
+    store.getState().raiseGuestRequest('room-1')
+    expect(store.getState().activeGuestRequests['room-1']).toEqual(first)
+  })
+
+  it('fulfillGuestRequest grants the bonus cash, increments the counter, and clears the request', () => {
+    store.setState({ cash: 0 })
+    store.getState().raiseGuestRequest('room-1')
+    const request = store.getState().activeGuestRequests['room-1']
+    const def = GUEST_REQUESTS.find((r) => r.id === request.defId)!
+
+    const succeeded = store.getState().fulfillGuestRequest('room-1')
+
+    expect(succeeded).toBe(true)
+    expect(store.getState().cash).toBe(def.bonusCash)
+    expect(store.getState().requestsFulfilledTotal).toBe(1)
+    expect(store.getState().activeGuestRequests['room-1']).toBeUndefined()
+  })
+
+  it('fulfillGuestRequest fails for a room with no pending request', () => {
+    expect(store.getState().fulfillGuestRequest('room-nonexistent')).toBe(false)
+  })
+
+  it('fulfillGuestRequest fails once the request has expired', () => {
+    store.getState().raiseGuestRequest('room-1')
+    const nowSpy = vi.spyOn(Date, 'now')
+    const request = store.getState().activeGuestRequests['room-1']
+    nowSpy.mockReturnValue(request.expiresAt + 1)
+
+    expect(store.getState().fulfillGuestRequest('room-1')).toBe(false)
+    nowSpy.mockRestore()
+  })
+
+  it('expireGuestRequest clears a request without granting anything', () => {
+    store.setState({ cash: 0 })
+    store.getState().raiseGuestRequest('room-1')
+    store.getState().expireGuestRequest('room-1')
+    expect(store.getState().activeGuestRequests['room-1']).toBeUndefined()
+    expect(store.getState().cash).toBe(0)
+    expect(store.getState().requestsFulfilledTotal).toBe(0)
+  })
+
+  it('unlocks the "Guest Whisperer" achievement after 20 fulfilled requests', () => {
+    for (let i = 0; i < 20; i++) {
+      store.getState().raiseGuestRequest(`room-${i}`)
+      store.getState().fulfillGuestRequest(`room-${i}`)
+    }
+    expect(store.getState().unlockedAchievementIds).toContain('guest-whisperer')
+  })
+})
+
+describe('tutorial', () => {
+  it('starts incomplete on a fresh save and completeTutorial marks it done', () => {
+    expect(store.getState().tutorialCompleted).toBe(false)
+    store.getState().completeTutorial()
+    expect(store.getState().tutorialCompleted).toBe(true)
+  })
+})
+
+describe('daily login streak on rehydration', () => {
+  function seedV5Save(key: string, overrides: Record<string, unknown> = {}) {
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        state: {
+          cash: 100,
+          totalEarned: 0,
+          lifetimeEarned: 0,
+          lastTickTimestamp: Date.now() - 1000,
+          locations: {
+            'loc-1': {
+              id: 'loc-1',
+              themeId: 'coastal',
+              floors: [{ index: 0, roomIds: [], slotCount: 4 }],
+              rooms: {},
+              staff: {},
+            },
+          },
+          activeLocationId: 'loc-1',
+          upgradeLevels: { marketing: 0, staffTraining: 0, concierge: 0 },
+          prestigePoints: 0,
+          prestigeCount: 0,
+          prestigeUpgradeLevels: { cheaperRooms: 0, headStart: 0, staffSynergy: 0, satisfactionFloor: 0 },
+          activeEvent: null,
+          eventsExperienced: 0,
+          currentSatisfactionStreakSeconds: 0,
+          bestSatisfactionStreakSeconds: 0,
+          totalPlaytimeSeconds: 0,
+          unlockedAchievementIds: [],
+          muted: false,
+          qualityOverride: 'auto',
+          requestsFulfilledTotal: 0,
+          lastLoginDate: null,
+          loginStreakDays: 0,
+          longestLoginStreakDays: 0,
+          tutorialCompleted: true,
+          ...overrides,
+        },
+        version: 5,
+      }),
+    )
+  }
+
+  it("a returning player's consecutive-day login grants a reward and increments the streak", () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    seedV5Save('test-save-streak', { lastLoginDate: yesterday, loginStreakDays: 2, longestLoginStreakDays: 2 })
+
+    const rehydrated = createGameStore('test-save-streak')
+    const state = rehydrated.getState()
+
+    expect(state.loginStreakDays).toBe(3)
+    expect(state.longestLoginStreakDays).toBe(3)
+    expect(state.pendingDailyReward).not.toBeNull()
+    expect(state.cash).toBeGreaterThan(100)
+  })
+
+  it('dismissDailyReward clears the pending reward without affecting cash', () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    seedV5Save('test-save-streak-dismiss', { lastLoginDate: yesterday, loginStreakDays: 1, longestLoginStreakDays: 1 })
+
+    const rehydrated = createGameStore('test-save-streak-dismiss')
+    expect(rehydrated.getState().pendingDailyReward).not.toBeNull()
+    const cashAfterReward = rehydrated.getState().cash
+
+    rehydrated.getState().dismissDailyReward()
+
+    expect(rehydrated.getState().pendingDailyReward).toBeNull()
+    expect(rehydrated.getState().cash).toBe(cashAfterReward)
+  })
+
+  it("a brand-new save's very first load starts the streak at 1 with no reward popup", () => {
+    seedV5Save('test-save-streak-first-ever', { lastLoginDate: null, loginStreakDays: 0, longestLoginStreakDays: 0 })
+
+    const rehydrated = createGameStore('test-save-streak-first-ever')
+    const state = rehydrated.getState()
+
+    expect(state.loginStreakDays).toBe(1)
+    expect(state.pendingDailyReward).toBeNull()
   })
 })

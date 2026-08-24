@@ -14,6 +14,8 @@ export interface AchievementSnapshot {
   eventsExperienced: number
   bestSatisfactionStreakSeconds: number
   totalPlaytimeSeconds: number
+  requestsFulfilledTotal: number
+  longestLoginStreakDays: number
 }
 
 export interface AchievementDef {
@@ -137,6 +139,18 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     label: 'Dedicated Owner',
     description: 'Play for a total of 1 hour.',
     isUnlocked: (s) => s.totalPlaytimeSeconds >= 3600,
+  },
+  {
+    id: 'guest-whisperer',
+    label: 'Guest Whisperer',
+    description: 'Fulfill 20 guest requests.',
+    isUnlocked: (s) => s.requestsFulfilledTotal >= 20,
+  },
+  {
+    id: 'loyal-guestkeeper',
+    label: 'Loyal Guestkeeper',
+    description: 'Reach a 7-day login streak.',
+    isUnlocked: (s) => s.longestLoginStreakDays >= 7,
   },
 ]
 

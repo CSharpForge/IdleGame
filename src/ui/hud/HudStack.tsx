@@ -3,6 +3,7 @@ import { SatisfactionBadge } from './SatisfactionBadge'
 import { PrestigeButton } from './PrestigeButton'
 import { EventBanner } from './EventBanner'
 import { AchievementToast } from '../modals/AchievementToast'
+import { GuestRequestTray } from './GuestRequestTray'
 import { SettingsButton } from './SettingsButton'
 
 function LeftZone() {
@@ -29,6 +30,7 @@ function CenterZone() {
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
       <EventBanner />
       <AchievementToast />
+      <GuestRequestTray />
     </div>
   )
 }

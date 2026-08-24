@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Select } from '@react-three/postprocessing'
 import { Vector3, type Group } from 'three'
 import { GUEST_STAY_SECONDS, GUEST_TRAVEL_SPEED } from '../../game/data/roomTypes'
+import { getGuestArchetypeDef } from '../../game/data/guestArchetypeDefs'
 import type { GuestRuntime } from '../../game/ecs/world'
 import { useGameStore } from '../../game/state/store'
 import { useToonGradientMap } from '../materials/toonMaterial'
@@ -18,6 +19,7 @@ export function GuestAgent({ entity }: { entity: GuestRuntime }) {
   const scratchPoint = useRef(new Vector3())
   const setRoomStatus = useGameStore((s) => s.setRoomStatus)
   const gradientMap = useToonGradientMap()
+  const archetype = getGuestArchetypeDef(entity.archetypeId)
 
   useFrame((_, delta) => {
     if (entity.phase === 'arriving' || entity.phase === 'leaving') {
@@ -52,15 +54,33 @@ export function GuestAgent({ entity }: { entity: GuestRuntime }) {
   return (
     <group ref={groupRef}>
       <Select enabled>
-        <group>
+        <group scale={archetype.scale}>
           <mesh position={[0, 0.4, 0]} castShadow>
             <capsuleGeometry args={[0.2, 0.44, 4, 8]} />
-            <meshToonMaterial color={entity.color} gradientMap={gradientMap} />
+            <meshToonMaterial color={archetype.shirtColor} gradientMap={gradientMap} />
           </mesh>
           <mesh position={[0, 0.82, 0]} castShadow>
             <sphereGeometry args={[0.18, 12, 12]} />
-            <meshToonMaterial color="#f1c27d" gradientMap={gradientMap} />
+            <meshToonMaterial color={archetype.skinColor} gradientMap={gradientMap} />
           </mesh>
+          {archetype.accessory === 'hat' && (
+            <mesh position={[0, 0.99, 0]} castShadow>
+              <coneGeometry args={[0.13, 0.16, 8]} />
+              <meshToonMaterial color="#2b2d42" gradientMap={gradientMap} />
+            </mesh>
+          )}
+          {archetype.accessory === 'backpack' && (
+            <mesh position={[0, 0.42, -0.18]} castShadow>
+              <boxGeometry args={[0.22, 0.3, 0.12]} />
+              <meshToonMaterial color="#5c3a21" gradientMap={gradientMap} />
+            </mesh>
+          )}
+          {archetype.accessory === 'suitcase' && (
+            <mesh position={[0.24, 0.16, 0.05]} castShadow>
+              <boxGeometry args={[0.16, 0.14, 0.08]} />
+              <meshToonMaterial color="#333333" gradientMap={gradientMap} />
+            </mesh>
+          )}
         </group>
       </Select>
     </group>

@@ -28,6 +28,8 @@ export const PLAY_GAMES_ACHIEVEMENT_IDS: Record<string, string> = {
   'event-veteran': 'PLACEHOLDER_event-veteran',
   'five-star-streak': 'PLACEHOLDER_five-star-streak',
   'dedicated-owner': 'PLACEHOLDER_dedicated-owner',
+  'guest-whisperer': 'PLACEHOLDER_guest-whisperer',
+  'loyal-guestkeeper': 'PLACEHOLDER_loyal-guestkeeper',
 }
 
 /** The single Play Console leaderboard id for lifetime earnings. */

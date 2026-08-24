@@ -5,7 +5,7 @@ const roomSchema = z.object({
   id: z.string(),
   floorIndex: z.number(),
   slotIndex: z.number(),
-  typeId: z.enum(['standard', 'deluxe', 'suite', 'penthouse']),
+  typeId: z.enum(['standard', 'deluxe', 'suite', 'penthouse', 'executiveSuite']),
   status: z.enum(['vacant', 'occupied']),
   builtAt: z.number(),
 })
@@ -73,6 +73,12 @@ export const persistedStateSchema = z.object({
   totalPlaytimeSeconds: z.number(),
   unlockedAchievementIds: z.array(z.string()),
   muted: z.boolean().optional(),
+  qualityOverride: z.enum(['auto', 'high', 'low']),
+  requestsFulfilledTotal: z.number(),
+  lastLoginDate: z.string().nullable(),
+  loginStreakDays: z.number(),
+  longestLoginStreakDays: z.number(),
+  tutorialCompleted: z.boolean(),
 })
 
 export type PersistedState = z.infer<typeof persistedStateSchema>

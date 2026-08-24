@@ -31,7 +31,15 @@ export const hudPillBgDim = 'rgba(0, 0, 0, 0.35)' // inactive/secondary pill
 export const hudPillBgActive = 'rgba(0, 0, 0, 0.75)' // pressed/selected emphasis
 
 export const modalBackdropStyle: CSSProperties = {
-  position: 'absolute',
+  // `fixed`, not `absolute`: several modals (SettingsModal and anything it
+  // opens, like AchievementsDashboardModal) are mounted from inside
+  // TopHudRow, which is itself `position: absolute` and only as tall as its
+  // own HUD row content — an `absolute` backdrop would resolve `inset: 0`
+  // against that small box instead of the viewport, only becoming visibly
+  // broken once a modal's content (the achievements dashboard) actually
+  // exceeded that HUD row's height. `fixed` always resolves against the
+  // viewport regardless of which ancestor happens to be positioned.
+  position: 'fixed',
   inset: 0,
   pointerEvents: 'auto',
   background: backdropDim,
@@ -41,7 +49,16 @@ export const modalBackdropStyle: CSSProperties = {
   padding: '20px',
 }
 
-/** maxHeight/overflowY guard against a modal's content growing past a short screen's height. */
+/**
+ * maxHeight/overflowY guard against a modal's content growing past a short
+ * screen's height. `minHeight: 0` is required alongside them: a flex item's
+ * default `min-height: auto` makes browsers center it (via
+ * modalBackdropStyle's `align-items: center`) using its unclamped content
+ * height instead of the clamped maxHeight, pushing tall content mostly
+ * above the viewport — a latent bug in this shared shell that only
+ * surfaced once a modal's content (the achievements dashboard) actually
+ * exceeded 80dvh for the first time.
+ */
 export function modalCardShellStyle(overrides?: CSSProperties): CSSProperties {
   return {
     background: colors.cardShellBg,
@@ -49,6 +66,7 @@ export function modalCardShellStyle(overrides?: CSSProperties): CSSProperties {
     maxWidth: '340px',
     width: '100%',
     maxHeight: '80dvh',
+    minHeight: 0,
     overflowY: 'auto',
     touchAction: 'pan-y',
     boxShadow: shadows.modal,

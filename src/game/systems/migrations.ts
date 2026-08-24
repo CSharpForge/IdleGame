@@ -1,6 +1,6 @@
 import { persistedStateSchema, type PersistedState } from './saveLoad'
 
-export const CURRENT_SAVE_VERSION = 4
+export const CURRENT_SAVE_VERSION = 5
 
 const STARTER_LOCATION_ID = 'loc-starter'
 
@@ -32,6 +32,12 @@ export function freshDefaultState(): PersistedState {
     totalPlaytimeSeconds: 0,
     unlockedAchievementIds: [],
     muted: false,
+    qualityOverride: 'auto',
+    requestsFulfilledTotal: 0,
+    lastLoginDate: null,
+    loginStreakDays: 0,
+    longestLoginStreakDays: 0,
+    tutorialCompleted: false,
   }
 }
 
@@ -108,6 +114,31 @@ function migrateV3ToV4(state: Record<string, unknown>): Record<string, unknown> 
 }
 
 /**
+ * v4 -> v5 (M9): quality-tier override, guest requests, daily login streak,
+ * and the first-run tutorial were introduced. Every new field here is a
+ * genuinely new counter/preference with no prior equivalent, so each just
+ * defaults to "none yet" / "unseen" — except `tutorialCompleted`, which is
+ * deliberately asymmetric: a brand-new save (freshDefaultState above) should
+ * see the tutorial, but any save that already existed before v5 belongs to a
+ * returning player who should never be shown a beginner tutorial
+ * retroactively, so it defaults to `true` here specifically. New room tier
+ * ('executiveSuite') is an enum widening only (see saveLoad.ts) — an older
+ * save's existing typeId values remain valid without any transform, so it
+ * doesn't need a migration step here at all.
+ */
+function migrateV4ToV5(state: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...state,
+    qualityOverride: state.qualityOverride ?? 'auto',
+    requestsFulfilledTotal: state.requestsFulfilledTotal ?? 0,
+    lastLoginDate: state.lastLoginDate ?? null,
+    loginStreakDays: state.loginStreakDays ?? 0,
+    longestLoginStreakDays: state.longestLoginStreakDays ?? 0,
+    tutorialCompleted: state.tutorialCompleted ?? true,
+  }
+}
+
+/**
  * Applied by zustand's `persist` middleware whenever a save's version is
  * older than CURRENT_SAVE_VERSION. Each step upgrades from the previous
  * shape; the result is validated against the current strict schema as a
@@ -125,6 +156,9 @@ export function migrateSave(persistedState: unknown, version: number): unknown {
   }
   if (version < 4) {
     state = migrateV3ToV4(state)
+  }
+  if (version < 5) {
+    state = migrateV4ToV5(state)
   }
 
   const result = persistedStateSchema.safeParse(state)

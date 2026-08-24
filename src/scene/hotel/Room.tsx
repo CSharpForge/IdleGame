@@ -1,12 +1,30 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
+import { useFrame } from '@react-three/fiber'
 import { animated } from '@react-spring/three'
 import { Select } from '@react-three/postprocessing'
+import type { Mesh } from 'three'
 import type { Room as RoomData } from '../../types/entities'
 import { getRoomTypeDef } from '../../game/data/roomTypes'
+import { useGameStore } from '../../game/state/store'
 import { ROOM_DEPTH, ROOM_HEIGHT, ROOM_WIDTH, roomCenterPosition } from './layout'
 import { useToonGradientMap } from '../materials/toonMaterial'
 import { useBuildPopIn } from './buildAnimation'
 import { CashBurst } from './CashBurst'
+
+// A gentle vertical bob so the indicator reads as "alive" without needing an
+// external spring/animation library for something this small.
+function RequestIndicator({ y }: { y: number }) {
+  const ref = useRef<Mesh>(null)
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.position.y = y + Math.sin(clock.elapsedTime * 3) * 0.08
+  })
+  return (
+    <mesh ref={ref} position={[0, y, (ROOM_DEPTH - 0.15) / 2 + 0.4]}>
+      <octahedronGeometry args={[0.16, 0]} />
+      <meshStandardMaterial color="#ffd700" emissive="#ffd700" emissiveIntensity={1} />
+    </mesh>
+  )
+}
 
 const WINDOW_VACANT = '#2b2d42'
 const CASH_BURST_DURATION_MS = 900
@@ -18,6 +36,7 @@ function RoomImpl({ room }: { room: RoomData }) {
   const position = roomCenterPosition(room.floorIndex, room.slotIndex)
   const occupied = room.status === 'occupied'
   const height = ROOM_HEIGHT * typeDef.heightScale
+  const hasRequest = useGameStore((s) => !!s.activeGuestRequests[room.id])
 
   const [burstId, setBurstId] = useState<number | null>(null)
 
@@ -55,6 +74,7 @@ function RoomImpl({ room }: { room: RoomData }) {
       {burstId !== null && (
         <CashBurst seed={burstId} position={[0, 0.5, (ROOM_DEPTH - 0.15) / 2 + 0.4]} />
       )}
+      {hasRequest && <RequestIndicator y={height + 0.3} />}
     </animated.group>
   )
 }

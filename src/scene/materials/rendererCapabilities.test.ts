@@ -64,4 +64,28 @@ describe('getQualityTier', () => {
     const tier = getQualityTier(fakeRenderer(null))
     expect(tier.outlineEnabled).toBe(true)
   })
+
+  it('"low" override forces the low tier even on a real GPU renderer', () => {
+    const tier = getQualityTier(fakeRenderer('Adreno (TM) 640'), 'low')
+    expect(tier.shadowsEnabled).toBe(false)
+    expect(tier.outlineEnabled).toBe(false)
+    expect(tier.maxConcurrentGuests).toBeLessThan(40)
+  })
+
+  it('"high" override restores shadows/guest-cap on a software renderer but NOT the outline', () => {
+    const tier = getQualityTier(fakeRenderer('Google SwiftShader'), 'high')
+    expect(tier.shadowsEnabled).toBe(true)
+    expect(tier.maxConcurrentGuests).toBe(40)
+    expect(tier.outlineEnabled).toBe(false)
+  })
+
+  it('"high" override on a real GPU renderer matches the plain high tier, outline included', () => {
+    const tier = getQualityTier(fakeRenderer('Adreno (TM) 640'), 'high')
+    expect(tier.outlineEnabled).toBe(true)
+  })
+
+  it('"auto" override is identical to the default (no override argument)', () => {
+    expect(getQualityTier(fakeRenderer('Google SwiftShader'), 'auto')).toEqual(getQualityTier(fakeRenderer('Google SwiftShader')))
+    expect(getQualityTier(fakeRenderer('Adreno (TM) 640'), 'auto')).toEqual(getQualityTier(fakeRenderer('Adreno (TM) 640')))
+  })
 })

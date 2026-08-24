@@ -5,6 +5,7 @@ import { DEFAULT_SAVE_KEY, useGameStore } from '../../game/state/store'
 import { saveCloudSnapshot, showAchievementsUI, showLeaderboardUI, signInSilently } from '../../platform/playGames/playGamesClient'
 import { resetCamera } from '../../scene/cameraControls'
 import { colors, modalBackdropStyle, modalCardShellStyle, radii } from '../theme'
+import { AchievementsDashboardModal } from './AchievementsDashboardModal'
 
 const isAndroidNative = Capacitor.getPlatform() === 'android'
 
@@ -20,10 +21,23 @@ const actionButtonStyle = (background: string): CSSProperties => ({
   marginBottom: '10px',
 })
 
+const QUALITY_OPTIONS = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'high', label: 'High' },
+  { value: 'low', label: 'Low' },
+] as const
+
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const muted = useGameStore((s) => s.muted)
   const toggleMuted = useGameStore((s) => s.toggleMuted)
+  const qualityOverride = useGameStore((s) => s.qualityOverride)
+  const setQualityOverride = useGameStore((s) => s.setQualityOverride)
   const [confirmingReset, setConfirmingReset] = useState(false)
+  const [showAchievementsDashboard, setShowAchievementsDashboard] = useState(false)
+
+  if (showAchievementsDashboard) {
+    return <AchievementsDashboardModal onClose={() => setShowAchievementsDashboard(false)} />
+  }
 
   return (
     <div style={modalBackdropStyle} onClick={onClose}>
@@ -33,6 +47,36 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <button onClick={toggleMuted} style={actionButtonStyle(colors.primary)}>
           {muted ? '🔇 Sound: Off' : '🔊 Sound: On'}
         </button>
+
+        <button onClick={() => setShowAchievementsDashboard(true)} style={actionButtonStyle(colors.purple)}>
+          🏆 Achievements &amp; Stats
+        </button>
+
+        <div style={{ marginBottom: '10px' }}>
+          <p style={{ fontSize: '13px', color: colors.textMuted, margin: '0 0 6px', textAlign: 'center' }}>
+            🖼️ Graphics Quality
+          </p>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {QUALITY_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setQualityOverride(option.value)}
+                style={{
+                  flex: 1,
+                  border: 'none',
+                  background: qualityOverride === option.value ? colors.primary : '#eee',
+                  color: qualityOverride === option.value ? '#fff' : colors.textMuted,
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  padding: '10px',
+                  borderRadius: radii.md,
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <button
           onClick={() => {

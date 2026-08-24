@@ -31,6 +31,8 @@ export interface QualityTier {
   outlineEnabled: boolean
 }
 
+export type QualityOverride = 'auto' | 'high' | 'low'
+
 const HIGH_QUALITY_TIER: QualityTier = {
   shadowsEnabled: true,
   shadowMapSize: [1024, 1024],
@@ -53,7 +55,16 @@ const LOW_QUALITY_TIER: QualityTier = {
  * natural single condition to scale everything else back on too (shadow
  * resolution, guest cap) rather than paying full quality for pixels that
  * are being rasterized in software anyway.
+ *
+ * `override` lets a player force a tier from Settings on top of this
+ * auto-detection. `outlineEnabled` deliberately stays gated by
+ * `isSoftwareRenderer` regardless of override — forcing "High" must never
+ * resurrect the confirmed-corrupted Outline effect on real software
+ * rendering, so "high" only restores shadows/guest-cap, not the outline.
  */
-export function getQualityTier(gl: WebGLRenderer): QualityTier {
-  return isSoftwareRenderer(gl) ? LOW_QUALITY_TIER : HIGH_QUALITY_TIER
+export function getQualityTier(gl: WebGLRenderer, override: QualityOverride = 'auto'): QualityTier {
+  const isSoftware = isSoftwareRenderer(gl)
+  if (override === 'low') return LOW_QUALITY_TIER
+  if (override === 'high') return { ...HIGH_QUALITY_TIER, outlineEnabled: !isSoftware }
+  return isSoftware ? LOW_QUALITY_TIER : HIGH_QUALITY_TIER
 }

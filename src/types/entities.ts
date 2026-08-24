@@ -1,6 +1,6 @@
 export type RoomStatus = 'vacant' | 'occupied'
 
-export type RoomTypeId = 'standard' | 'deluxe' | 'suite' | 'penthouse'
+export type RoomTypeId = 'standard' | 'deluxe' | 'suite' | 'penthouse' | 'executiveSuite'
 
 export interface Room {
   id: string
@@ -58,5 +58,5 @@ export interface GuestEntity {
   slotIndex: number
   pathT: number
   stayTimer: number
-  color: string
+  archetypeId: string
 }

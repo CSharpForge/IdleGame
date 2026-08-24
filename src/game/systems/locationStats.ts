@@ -23,6 +23,8 @@ export interface StatsSourceState {
   eventsExperienced: number
   bestSatisfactionStreakSeconds: number
   totalPlaytimeSeconds: number
+  requestsFulfilledTotal: number
+  longestLoginStreakDays: number
 }
 
 export function countByType(rooms: Record<string, Room>): Partial<Record<RoomTypeId, number>> {
@@ -112,5 +114,7 @@ export function buildAchievementSnapshot(state: StatsSourceState): AchievementSn
     eventsExperienced: state.eventsExperienced,
     bestSatisfactionStreakSeconds: state.bestSatisfactionStreakSeconds,
     totalPlaytimeSeconds: state.totalPlaytimeSeconds,
+    requestsFulfilledTotal: state.requestsFulfilledTotal,
+    longestLoginStreakDays: state.longestLoginStreakDays,
   }
 }
