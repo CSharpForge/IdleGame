@@ -4,18 +4,20 @@ import { createReactAPI, useEntities } from 'miniplex-react'
 import { guestWorld, spawnGuest } from '../../game/ecs/world'
 import { useGameStore } from '../../game/state/store'
 import { GUEST_SPAWN_CHANCE_PER_SEC } from '../../game/data/roomTypes'
+import { useQualityTier } from '../qualityTier'
 import { GuestAgent } from './GuestAgent'
 
 const GuestECS = createReactAPI(guestWorld)
 
-// A hard ceiling on simultaneous visible guests. Income never depends on
-// literal guest count (see economyTick.ts's closed-form occupancy math), so
-// this only bounds render/outline-pass cost on a very large, very lucky-RNG
-// hotel — it doesn't change earnings at all.
-const MAX_CONCURRENT_GUESTS = 40
-
 function GuestSpawnerAndReaper() {
   const claimCheckAccumulator = useRef(0)
+  // A hard ceiling on simultaneous visible guests. Income never depends on
+  // literal guest count (see economyTick.ts's closed-form occupancy math),
+  // so this only bounds render/outline-pass cost — it doesn't change
+  // earnings at all. Scaled down under the low quality tier (see
+  // rendererCapabilities.ts) since that's also the one path this project can
+  // reach without real GPU passthrough.
+  const { maxConcurrentGuests } = useQualityTier()
 
   useFrame((_, delta) => {
     // Reap guests whose journey/stay finished this frame. `guestWorld` (a
@@ -36,7 +38,7 @@ function GuestSpawnerAndReaper() {
     claimCheckAccumulator.current = 0
 
     const liveEntities = guestWorld.entities.filter((e) => e.phase !== 'done')
-    if (liveEntities.length >= MAX_CONCURRENT_GUESTS) return
+    if (liveEntities.length >= maxConcurrentGuests) return
 
     const { floors, rooms } = useGameStore.getState().activeLocation()
     const claimedRoomIds = new Set(liveEntities.map((e) => e.roomId))

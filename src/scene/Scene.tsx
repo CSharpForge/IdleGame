@@ -7,23 +7,32 @@ import { getLocationThemeDef } from '../game/data/locationThemes'
 import { Building } from './hotel/Building'
 import { GuestSimulation } from './guests/GuestSimulation'
 import { orbitControlsRef } from './cameraControls'
-import { isSoftwareRenderer } from './materials/rendererCapabilities'
+import { getQualityTier } from './materials/rendererCapabilities'
+import { QualityTierProvider } from './QualityTierContext'
 
 export function Scene() {
   const themeId = useGameStore((s) => s.activeLocation().themeId)
   const theme = getLocationThemeDef(themeId)
   const gl = useThree((state) => state.gl)
-  const [outlineSupported] = useState(() => !isSoftwareRenderer(gl))
+  // Computed once per mount, same as the outlineSupported state this
+  // replaces — the renderer's software-vs-hardware nature doesn't change
+  // mid-session, so there's nothing to react to here.
+  const [tier] = useState(() => getQualityTier(gl))
 
   return (
-    <>
+    <QualityTierProvider tier={tier}>
       {/* Explicit sky color — without this the canvas is transparent and
           shows whatever the page background happens to be, which flips to
           black on a dark-mode OS/browser (see index.css color-scheme). Tied
           to the active location's theme so each hotel has its own mood. */}
       <color attach="background" args={[theme.skyColor]} />
       <ambientLight intensity={0.7} />
-      <directionalLight position={[6, 10, 4]} intensity={1.3} castShadow shadow-mapSize={[1024, 1024]} />
+      <directionalLight
+        position={[6, 10, 4]}
+        intensity={1.3}
+        castShadow={tier.shadowsEnabled}
+        shadow-mapSize={tier.shadowMapSize}
+      />
       <hemisphereLight args={[theme.ambientSkyColor, theme.groundColor, 0.4]} />
 
       {/* Only Room and GuestAgent wrap their meshes in <Select enabled> (see
@@ -32,7 +41,7 @@ export function Scene() {
       <Selection>
         <Building />
         <GuestSimulation />
-        {outlineSupported && (
+        {tier.outlineEnabled && (
           <EffectComposer autoClear={false}>
             <Outline visibleEdgeColor={0x2b2d42} hiddenEdgeColor={0x2b2d42} edgeStrength={3.5} blur />
           </EffectComposer>
@@ -54,6 +63,6 @@ export function Scene() {
         maxPolarAngle={Math.PI / 2.1}
         target={[-0.5, 1.8, -1]}
       />
-    </>
+    </QualityTierProvider>
   )
 }

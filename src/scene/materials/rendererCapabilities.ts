@@ -23,3 +23,37 @@ export function isSoftwareRenderer(gl: WebGLRenderer): boolean {
     return false
   }
 }
+
+export interface QualityTier {
+  shadowsEnabled: boolean
+  shadowMapSize: [number, number]
+  maxConcurrentGuests: number
+  outlineEnabled: boolean
+}
+
+const HIGH_QUALITY_TIER: QualityTier = {
+  shadowsEnabled: true,
+  shadowMapSize: [1024, 1024],
+  maxConcurrentGuests: 40,
+  outlineEnabled: true,
+}
+
+const LOW_QUALITY_TIER: QualityTier = {
+  shadowsEnabled: false,
+  shadowMapSize: [512, 512],
+  maxConcurrentGuests: 15,
+  outlineEnabled: false,
+}
+
+/**
+ * Reuses the same software-renderer signal as isSoftwareRenderer (see above)
+ * rather than adding new detection machinery — a software rasterizer is
+ * already known to render the Outline effect corrupted, and it's also the
+ * one path this project can reach without real GPU passthrough, so it's the
+ * natural single condition to scale everything else back on too (shadow
+ * resolution, guest cap) rather than paying full quality for pixels that
+ * are being rasterized in software anyway.
+ */
+export function getQualityTier(gl: WebGLRenderer): QualityTier {
+  return isSoftwareRenderer(gl) ? LOW_QUALITY_TIER : HIGH_QUALITY_TIER
+}
