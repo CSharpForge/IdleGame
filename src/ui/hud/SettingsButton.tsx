@@ -10,9 +10,7 @@ export function SettingsButton() {
       <button
         onClick={() => setOpen(true)}
         style={{
-          position: 'absolute',
-          top: 'max(12px, env(safe-area-inset-top))',
-          right: 'max(12px, env(safe-area-inset-right))',
+          flexShrink: 0,
           pointerEvents: 'auto',
           background: hudPillBg,
           color: '#fff',

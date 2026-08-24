@@ -20,12 +20,12 @@ export function AchievementToast() {
         gap: '10px',
         boxShadow: shadows.toast,
         cursor: 'pointer',
-        maxWidth: '90vw',
+        maxWidth: '100%',
       }}
       onClick={dismiss}
     >
-      <span style={{ fontSize: '24px' }}>🏆</span>
-      <div>
+      <span style={{ fontSize: '24px', flexShrink: 0 }}>🏆</span>
+      <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: 700, fontSize: '14px' }}>{achievement.label}</div>
         <div style={{ fontSize: '12px', opacity: 0.85 }}>{achievement.description}</div>
       </div>

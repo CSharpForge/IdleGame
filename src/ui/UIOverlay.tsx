@@ -1,5 +1,4 @@
-import { SettingsButton } from './hud/SettingsButton'
-import { TopCenterHudStack, TopLeftHudStack } from './hud/HudStack'
+import { TopHudRow } from './hud/HudStack'
 import { ShopPanel } from './panels/ShopPanel'
 import { OfflineEarningsModal } from './modals/OfflineEarningsModal'
 
@@ -12,9 +11,7 @@ export function UIOverlay() {
         pointerEvents: 'none',
       }}
     >
-      <TopLeftHudStack />
-      <TopCenterHudStack />
-      <SettingsButton />
+      <TopHudRow />
       <ShopPanel />
       <OfflineEarningsModal />
     </div>

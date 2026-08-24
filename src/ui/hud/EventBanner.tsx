@@ -32,6 +32,9 @@ export function EventBanner() {
         alignItems: 'center',
         gap: '8px',
         boxShadow: shadows.banner,
+        maxWidth: '100%',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
       }}
     >
       <span>🎉 {def.label}</span>
