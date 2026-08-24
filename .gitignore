@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# graphify-generated knowledge graph (regenerable output, not source)
+graphify-out
+
 # Android / Capacitor
 android/app/build
 android/build
