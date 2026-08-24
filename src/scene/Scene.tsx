@@ -45,7 +45,7 @@ export function Scene() {
         minDistance={4}
         maxDistance={24}
         maxPolarAngle={Math.PI / 2.1}
-        target={[0, 2.5, -1]}
+        target={[-0.5, 1.8, -1]}
       />
     </>
   )

@@ -10,7 +10,7 @@ export function App() {
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <Canvas
         shadows
-        camera={{ position: [12, 9, 16], fov: 55 }}
+        camera={{ position: [11, 7, 15], fov: 52 }}
         style={{ position: 'absolute', inset: 0 }}
       >
         <Scene />
