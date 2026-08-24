@@ -1,0 +1,61 @@
+import { useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
+import { createReactAPI, useEntities } from 'miniplex-react'
+import { guestWorld, spawnGuest } from '../../game/ecs/world'
+import { useGameStore } from '../../game/state/store'
+import { GUEST_SPAWN_CHANCE_PER_SEC } from '../../game/data/roomTypes'
+import { GuestAgent } from './GuestAgent'
+
+const GuestECS = createReactAPI(guestWorld)
+
+function GuestSpawnerAndReaper() {
+  const claimCheckAccumulator = useRef(0)
+
+  useFrame((_, delta) => {
+    // Reap guests whose journey/stay finished this frame.
+    for (const entity of [...guestWorld.entities]) {
+      if (entity.phase === 'done') {
+        guestWorld.remove(entity)
+      }
+    }
+
+    // Throttle spawn rolls to ~5/sec instead of every render frame.
+    claimCheckAccumulator.current += delta
+    if (claimCheckAccumulator.current < 0.2) return
+    const stepSeconds = claimCheckAccumulator.current
+    claimCheckAccumulator.current = 0
+
+    const { floors, rooms } = useGameStore.getState()
+    const claimedRoomIds = new Set(
+      [...guestWorld.entities]
+        .filter((e) => e.phase !== 'done')
+        .map((e) => e.roomId),
+    )
+
+    for (const floor of floors) {
+      for (const roomId of floor.roomIds) {
+        const room = rooms[roomId]
+        if (!room || room.status === 'occupied' || claimedRoomIds.has(roomId)) continue
+        const chance = GUEST_SPAWN_CHANCE_PER_SEC * stepSeconds
+        if (Math.random() < chance) {
+          spawnGuest(room.floorIndex, room.slotIndex, room.id)
+        }
+      }
+    }
+  })
+
+  return null
+}
+
+export function GuestSimulation() {
+  const entities = useEntities(guestWorld)
+
+  return (
+    <>
+      <GuestSpawnerAndReaper />
+      <GuestECS.Entities in={entities}>
+        {(entity) => <GuestAgent entity={entity} />}
+      </GuestECS.Entities>
+    </>
+  )
+}
