@@ -18,8 +18,12 @@ function GuestSpawnerAndReaper() {
   const claimCheckAccumulator = useRef(0)
 
   useFrame((_, delta) => {
-    // Reap guests whose journey/stay finished this frame.
-    for (const entity of [...guestWorld.entities]) {
+    // Reap guests whose journey/stay finished this frame. `guestWorld` (a
+    // miniplex Bucket) ships a reverse-order iterator specifically so it's
+    // safe to `remove()` while iterating it directly — no defensive copy
+    // needed (and a copy wouldn't even be enough on its own: remove() is a
+    // swap-pop, which a plain forward copy doesn't protect against).
+    for (const entity of guestWorld) {
       if (entity.phase === 'done') {
         guestWorld.remove(entity)
       }
@@ -31,7 +35,7 @@ function GuestSpawnerAndReaper() {
     const stepSeconds = claimCheckAccumulator.current
     claimCheckAccumulator.current = 0
 
-    const liveEntities = [...guestWorld.entities].filter((e) => e.phase !== 'done')
+    const liveEntities = guestWorld.entities.filter((e) => e.phase !== 'done')
     if (liveEntities.length >= MAX_CONCURRENT_GUESTS) return
 
     const { floors, rooms } = useGameStore.getState().activeLocation()
@@ -60,7 +64,7 @@ export function GuestSimulation() {
   // clear them on switch rather than letting stale guests from the
   // previous hotel wander through the newly-shown one.
   useEffect(() => {
-    for (const entity of [...guestWorld.entities]) {
+    for (const entity of guestWorld) {
       guestWorld.remove(entity)
     }
   }, [activeLocationId])

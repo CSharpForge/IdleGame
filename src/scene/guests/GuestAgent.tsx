@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Select } from '@react-three/postprocessing'
-import type { Group } from 'three'
+import { Vector3, type Group } from 'three'
 import { GUEST_STAY_SECONDS, GUEST_TRAVEL_SPEED } from '../../game/data/roomTypes'
 import type { GuestRuntime } from '../../game/ecs/world'
 import { useGameStore } from '../../game/state/store'
@@ -15,6 +15,7 @@ import { buildDeparturePath, pathLength } from './waypoints'
 // oxlint-disable react/immutability
 export function GuestAgent({ entity }: { entity: GuestRuntime }) {
   const groupRef = useRef<Group>(null)
+  const scratchPoint = useRef(new Vector3())
   const setRoomStatus = useGameStore((s) => s.setRoomStatus)
   const gradientMap = useToonGradientMap()
 
@@ -22,7 +23,7 @@ export function GuestAgent({ entity }: { entity: GuestRuntime }) {
     if (entity.phase === 'arriving' || entity.phase === 'leaving') {
       const advance = GUEST_TRAVEL_SPEED * delta
       entity.pathT = Math.min(1, entity.pathT + advance / Math.max(entity.curveLength, 0.001))
-      const point = entity.curve.getPointAt(entity.pathT)
+      const point = entity.curve.getPointAt(entity.pathT, scratchPoint.current)
       groupRef.current?.position.copy(point)
 
       if (entity.pathT >= 1) {
