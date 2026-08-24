@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { SettingsModal } from '../modals/SettingsModal'
+import { hudPillBg, radii } from '../theme'
 
 export function SettingsButton() {
   const [open, setOpen] = useState(false)
@@ -11,14 +12,14 @@ export function SettingsButton() {
         style={{
           position: 'absolute',
           top: 'max(12px, env(safe-area-inset-top))',
-          right: '12px',
+          right: 'max(12px, env(safe-area-inset-right))',
           pointerEvents: 'auto',
-          background: 'rgba(0, 0, 0, 0.55)',
+          background: hudPillBg,
           color: '#fff',
           border: 'none',
           width: '44px',
           height: '44px',
-          borderRadius: '12px',
+          borderRadius: radii.md,
           fontSize: '20px',
         }}
       >

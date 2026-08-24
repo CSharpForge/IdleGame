@@ -1,4 +1,5 @@
 import { useGameStore } from '../../game/state/store'
+import { hudPillBg, radii } from '../theme'
 
 function faceForSatisfaction(satisfaction: number): string {
   if (satisfaction >= 0.9) return '😄'
@@ -13,14 +14,11 @@ export function SatisfactionBadge() {
   return (
     <div
       style={{
-        position: 'absolute',
-        top: 'max(64px, calc(env(safe-area-inset-top) + 52px))',
-        left: '12px',
         pointerEvents: 'auto',
-        background: 'rgba(0, 0, 0, 0.55)',
+        background: hudPillBg,
         color: '#fff',
         padding: '8px 14px',
-        borderRadius: '12px',
+        borderRadius: radii.md,
         fontSize: '14px',
         fontWeight: 600,
         display: 'flex',

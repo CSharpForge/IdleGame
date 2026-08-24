@@ -1,11 +1,7 @@
-import { CurrencyDisplay } from './hud/CurrencyDisplay'
 import { SettingsButton } from './hud/SettingsButton'
-import { SatisfactionBadge } from './hud/SatisfactionBadge'
-import { PrestigeButton } from './hud/PrestigeButton'
-import { EventBanner } from './hud/EventBanner'
+import { TopCenterHudStack, TopLeftHudStack } from './hud/HudStack'
 import { ShopPanel } from './panels/ShopPanel'
 import { OfflineEarningsModal } from './modals/OfflineEarningsModal'
-import { AchievementToast } from './modals/AchievementToast'
 
 export function UIOverlay() {
   return (
@@ -16,14 +12,11 @@ export function UIOverlay() {
         pointerEvents: 'none',
       }}
     >
-      <CurrencyDisplay />
-      <SatisfactionBadge />
-      <PrestigeButton />
-      <EventBanner />
+      <TopLeftHudStack />
+      <TopCenterHudStack />
       <SettingsButton />
       <ShopPanel />
       <OfflineEarningsModal />
-      <AchievementToast />
     </div>
   )
 }

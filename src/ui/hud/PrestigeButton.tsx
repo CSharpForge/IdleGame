@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useGameStore } from '../../game/state/store'
 import { PrestigeConfirmModal } from '../modals/PrestigeConfirmModal'
+import { colors, hudPillBgDim, radii } from '../theme'
 
 export function PrestigeButton() {
   const [open, setOpen] = useState(false)
@@ -14,15 +15,12 @@ export function PrestigeButton() {
       <button
         onClick={() => setOpen(true)}
         style={{
-          position: 'absolute',
-          top: 'max(112px, calc(env(safe-area-inset-top) + 100px))',
-          left: '12px',
           pointerEvents: 'auto',
-          background: preview >= 1 ? '#9b5de5' : 'rgba(0,0,0,0.4)',
+          background: preview >= 1 ? colors.purple : hudPillBgDim,
           color: '#fff',
           border: 'none',
           padding: '8px 14px',
-          borderRadius: '12px',
+          borderRadius: radii.md,
           fontSize: '13px',
           fontWeight: 700,
         }}

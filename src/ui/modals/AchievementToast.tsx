@@ -1,4 +1,5 @@
 import { useGameStore } from '../../game/state/store'
+import { radii, shadows } from '../theme'
 
 export function AchievementToast() {
   const achievement = useGameStore((s) => s.pendingAchievements[0])
@@ -9,19 +10,15 @@ export function AchievementToast() {
   return (
     <div
       style={{
-        position: 'absolute',
-        top: 'max(64px, calc(env(safe-area-inset-top) + 52px))',
-        left: '50%',
-        transform: 'translateX(-50%)',
         pointerEvents: 'auto',
         background: '#2b2d42',
         color: '#fff',
-        borderRadius: '14px',
+        borderRadius: radii.lg,
         padding: '10px 18px',
         display: 'flex',
         alignItems: 'center',
         gap: '10px',
-        boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
+        boxShadow: shadows.toast,
         cursor: 'pointer',
         maxWidth: '90vw',
       }}

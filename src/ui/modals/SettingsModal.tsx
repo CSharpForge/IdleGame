@@ -1,11 +1,24 @@
 import { Capacitor } from '@capacitor/core'
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { freshDefaultState } from '../../game/systems/migrations'
 import { DEFAULT_SAVE_KEY, useGameStore } from '../../game/state/store'
 import { saveCloudSnapshot, showAchievementsUI, showLeaderboardUI, signInSilently } from '../../platform/playGames/playGamesClient'
 import { resetCamera } from '../../scene/cameraControls'
+import { colors, modalBackdropStyle, modalCardShellStyle, radii } from '../theme'
 
 const isAndroidNative = Capacitor.getPlatform() === 'android'
+
+const actionButtonStyle = (background: string): CSSProperties => ({
+  width: '100%',
+  border: 'none',
+  background,
+  color: '#fff',
+  fontWeight: 700,
+  fontSize: '15px',
+  padding: '12px',
+  borderRadius: radii.md,
+  marginBottom: '10px',
+})
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const muted = useGameStore((s) => s.muted)
@@ -13,46 +26,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [confirmingReset, setConfirmingReset] = useState(false)
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        pointerEvents: 'auto',
-        background: 'rgba(0, 0, 0, 0.55)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: '#fff',
-          borderRadius: '18px',
-          padding: '24px',
-          maxWidth: '340px',
-          width: '100%',
-          boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div style={modalBackdropStyle} onClick={onClose}>
+      <div style={modalCardShellStyle({ padding: '24px' })} onClick={(e) => e.stopPropagation()}>
         <h2 style={{ margin: '0 0 16px', fontSize: '20px', textAlign: 'center' }}>⚙️ Settings</h2>
 
-        <button
-          onClick={toggleMuted}
-          style={{
-            width: '100%',
-            border: 'none',
-            background: '#3d5a80',
-            color: '#fff',
-            fontWeight: 700,
-            fontSize: '15px',
-            padding: '12px',
-            borderRadius: '12px',
-            marginBottom: '10px',
-          }}
-        >
+        <button onClick={toggleMuted} style={actionButtonStyle(colors.primary)}>
           {muted ? '🔇 Sound: Off' : '🔊 Sound: On'}
         </button>
 
@@ -61,78 +39,29 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             resetCamera()
             onClose()
           }}
-          style={{
-            width: '100%',
-            border: 'none',
-            background: '#4d908e',
-            color: '#fff',
-            fontWeight: 700,
-            fontSize: '15px',
-            padding: '12px',
-            borderRadius: '12px',
-            marginBottom: '10px',
-          }}
+          style={actionButtonStyle(colors.teal)}
         >
           🎥 Reset Camera
         </button>
 
         {isAndroidNative && (
           <>
-            <button
-              onClick={() => void showAchievementsUI()}
-              style={{
-                width: '100%',
-                border: 'none',
-                background: '#3d5a80',
-                color: '#fff',
-                fontWeight: 700,
-                fontSize: '15px',
-                padding: '12px',
-                borderRadius: '12px',
-                marginBottom: '10px',
-              }}
-            >
+            <button onClick={() => void showAchievementsUI()} style={actionButtonStyle(colors.primary)}>
               🏆 Achievements
             </button>
-            <button
-              onClick={() => void showLeaderboardUI()}
-              style={{
-                width: '100%',
-                border: 'none',
-                background: '#3d5a80',
-                color: '#fff',
-                fontWeight: 700,
-                fontSize: '15px',
-                padding: '12px',
-                borderRadius: '12px',
-                marginBottom: '10px',
-              }}
-            >
+            <button onClick={() => void showLeaderboardUI()} style={actionButtonStyle(colors.primary)}>
               📊 Leaderboard
             </button>
           </>
         )}
 
         {!confirmingReset ? (
-          <button
-            onClick={() => setConfirmingReset(true)}
-            style={{
-              width: '100%',
-              border: 'none',
-              background: '#e07a5f',
-              color: '#fff',
-              fontWeight: 700,
-              fontSize: '15px',
-              padding: '12px',
-              borderRadius: '12px',
-              marginBottom: '10px',
-            }}
-          >
+          <button onClick={() => setConfirmingReset(true)} style={actionButtonStyle(colors.coral)}>
             🗑️ Reset Save
           </button>
         ) : (
           <div style={{ marginBottom: '10px' }}>
-            <p style={{ fontSize: '13px', color: '#666', textAlign: 'center', margin: '0 0 8px' }}>
+            <p style={{ fontSize: '13px', color: colors.textMuted, textAlign: 'center', margin: '0 0 8px' }}>
               This permanently erases all progress. Are you sure?
             </p>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -154,12 +83,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 style={{
                   flex: 1,
                   border: 'none',
-                  background: '#c1121f',
+                  background: colors.danger,
                   color: '#fff',
                   fontWeight: 700,
                   fontSize: '14px',
                   padding: '10px',
-                  borderRadius: '12px',
+                  borderRadius: radii.md,
                 }}
               >
                 Yes, erase it
@@ -174,7 +103,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   fontWeight: 700,
                   fontSize: '14px',
                   padding: '10px',
-                  borderRadius: '12px',
+                  borderRadius: radii.md,
                 }}
               >
                 Cancel
@@ -189,7 +118,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             width: '100%',
             border: 'none',
             background: 'transparent',
-            color: '#666',
+            color: colors.textMuted,
             fontSize: '14px',
             padding: '8px',
           }}

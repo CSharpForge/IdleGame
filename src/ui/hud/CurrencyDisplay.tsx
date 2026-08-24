@@ -1,5 +1,6 @@
 import { useGameStore } from '../../game/state/store'
 import { formatNumber } from '../../utils/formatNumber'
+import { hudPillBg, radii } from '../theme'
 
 export function CurrencyDisplay() {
   const cash = useGameStore((s) => s.cash)
@@ -7,14 +8,11 @@ export function CurrencyDisplay() {
   return (
     <div
       style={{
-        position: 'absolute',
-        top: 'max(12px, env(safe-area-inset-top))',
-        left: '12px',
         pointerEvents: 'auto',
-        background: 'rgba(0, 0, 0, 0.55)',
+        background: hudPillBg,
         color: '#fff',
         padding: '10px 16px',
-        borderRadius: '12px',
+        borderRadius: radii.md,
         fontSize: '18px',
         fontWeight: 600,
       }}

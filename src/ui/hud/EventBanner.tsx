@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useGameStore } from '../../game/state/store'
 import { getEventDef } from '../../game/data/eventDefs'
+import { colors, radii, shadows } from '../theme'
 
 export function EventBanner() {
   const activeEvent = useGameStore((s) => s.activeEvent)
@@ -20,21 +21,17 @@ export function EventBanner() {
   return (
     <div
       style={{
-        position: 'absolute',
-        top: 'max(12px, env(safe-area-inset-top))',
-        left: '50%',
-        transform: 'translateX(-50%)',
         pointerEvents: 'none',
-        background: '#e07a5f',
+        background: colors.coral,
         color: '#fff',
-        borderRadius: '12px',
+        borderRadius: radii.md,
         padding: '8px 16px',
         fontSize: '13px',
         fontWeight: 700,
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+        boxShadow: shadows.banner,
       }}
     >
       <span>🎉 {def.label}</span>

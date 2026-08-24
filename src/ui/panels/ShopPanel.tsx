@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { useGameStore } from '../../game/state/store'
 import { ROOM_TYPES } from '../../game/data/roomTypes'
 import { STAFF_ROLES } from '../../game/data/staffDefs'
@@ -6,8 +6,12 @@ import { UPGRADES } from '../../game/data/upgradeDefs'
 import { PRESTIGE_UPGRADES } from '../../game/data/prestigeUpgradeDefs'
 import { LOCATION_THEMES } from '../../game/data/locationThemes'
 import { formatNumber } from '../../utils/formatNumber'
+import { colors, hudPillBgActive, hudPillBgDim, modalBackdropStyle, radii } from '../theme'
 
 type Tab = 'rooms' | 'staff' | 'upgrades' | 'prestige' | 'locations'
+
+const TAP_THRESHOLD_PX = 8
+const SNAP_FRACTION = 0.35
 
 const panelStyle: CSSProperties = {
   position: 'absolute',
@@ -20,33 +24,50 @@ const panelStyle: CSSProperties = {
   gap: '8px',
 }
 
+const headerStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: '6px',
+  touchAction: 'none',
+}
+
+const handleNubStyle: CSSProperties = {
+  width: '36px',
+  height: '4px',
+  borderRadius: '2px',
+  background: 'rgba(255,255,255,0.6)',
+  border: 'none',
+  padding: 0,
+}
+
 const tabRowStyle: CSSProperties = {
   display: 'flex',
   gap: '6px',
+  width: '100%',
 }
 
 const tabButtonStyle = (active: boolean): CSSProperties => ({
   flex: 1,
   padding: '6px',
-  borderRadius: '10px',
+  borderRadius: radii.sm,
   border: 'none',
   fontWeight: 700,
   fontSize: '12px',
-  background: active ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.35)',
+  background: active ? hudPillBgActive : hudPillBgDim,
   color: '#fff',
 })
 
-const cardRowStyle: CSSProperties = {
-  display: 'flex',
+const cardGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
   gap: '10px',
-  overflowX: 'auto',
-  paddingBottom: '2px',
+  padding: '4px 2px 12px',
 }
 
 const cardStyle: CSSProperties = {
-  minWidth: '140px',
   minHeight: '72px',
-  borderRadius: '14px',
+  borderRadius: radii.lg,
   border: 'none',
   color: '#fff',
   display: 'flex',
@@ -55,7 +76,6 @@ const cardStyle: CSSProperties = {
   justifyContent: 'center',
   gap: '2px',
   padding: '8px',
-  flexShrink: 0,
 }
 
 function RoomCards() {
@@ -78,7 +98,7 @@ function RoomCards() {
   const canExpandWing = wingCost !== null && cash >= wingCost
 
   return (
-    <div style={cardRowStyle}>
+    <div style={cardGridStyle}>
       {ROOM_TYPES.map((def) => {
         const unlocked = totalRooms >= def.unlockAtRoomCount
         const cost = nextRoomCost(def.id)
@@ -86,7 +106,7 @@ function RoomCards() {
         return (
           <button
             key={def.id}
-            style={{ ...cardStyle, background: affordable ? def.color : '#8a8a8a', opacity: unlocked ? 1 : 0.6 }}
+            style={{ ...cardStyle, background: affordable ? def.color : colors.neutralDisabled, opacity: unlocked ? 1 : 0.6 }}
             disabled={!affordable}
             onClick={() => buyRoom(def.id)}
           >
@@ -102,7 +122,7 @@ function RoomCards() {
         )
       })}
       <button
-        style={{ ...cardStyle, background: canBuyFloor ? '#3d5a80' : '#8a8a8a' }}
+        style={{ ...cardStyle, background: canBuyFloor ? colors.primary : colors.neutralDisabled }}
         disabled={!canBuyFloor}
         onClick={() => buyFloor()}
       >
@@ -111,7 +131,7 @@ function RoomCards() {
       </button>
       {expandableFloorIndex !== null && (
         <button
-          style={{ ...cardStyle, background: canExpandWing ? '#588157' : '#8a8a8a' }}
+          style={{ ...cardStyle, background: canExpandWing ? '#588157' : colors.neutralDisabled }}
           disabled={!canExpandWing}
           onClick={() => expandFloor(expandableFloorIndex)}
         >
@@ -130,7 +150,7 @@ function StaffCards() {
   const staffCountByRole = useGameStore((s) => s.staffCountByRole)
 
   return (
-    <div style={cardRowStyle}>
+    <div style={cardGridStyle}>
       {STAFF_ROLES.map((def) => {
         const cost = nextStaffCost(def.id)
         const count = staffCountByRole(def.id)
@@ -138,7 +158,7 @@ function StaffCards() {
         return (
           <button
             key={def.id}
-            style={{ ...cardStyle, background: affordable ? '#4d908e' : '#8a8a8a' }}
+            style={{ ...cardStyle, background: affordable ? colors.teal : colors.neutralDisabled }}
             disabled={!affordable}
             onClick={() => hireStaff(def.id)}
           >
@@ -160,7 +180,7 @@ function UpgradeCards() {
   const nextUpgradeCost = useGameStore((s) => s.nextUpgradeCost)
 
   return (
-    <div style={cardRowStyle}>
+    <div style={cardGridStyle}>
       {UPGRADES.map((def) => {
         const level = upgradeLevels[def.id]
         const maxed = level >= def.maxLevel
@@ -169,7 +189,7 @@ function UpgradeCards() {
         return (
           <button
             key={def.id}
-            style={{ ...cardStyle, background: affordable ? '#e07a5f' : '#8a8a8a' }}
+            style={{ ...cardStyle, background: affordable ? colors.coral : colors.neutralDisabled }}
             disabled={!affordable}
             onClick={() => buyUpgrade(def.id)}
           >
@@ -192,7 +212,7 @@ function PrestigeUpgradeCards() {
   const nextPrestigeUpgradeCost = useGameStore((s) => s.nextPrestigeUpgradeCost)
 
   return (
-    <div style={cardRowStyle}>
+    <div style={cardGridStyle}>
       {PRESTIGE_UPGRADES.map((def) => {
         const level = prestigeUpgradeLevels[def.id]
         const maxed = level >= def.maxLevel
@@ -201,7 +221,7 @@ function PrestigeUpgradeCards() {
         return (
           <button
             key={def.id}
-            style={{ ...cardStyle, background: affordable ? '#f4a261' : '#8a8a8a' }}
+            style={{ ...cardStyle, background: affordable ? '#f4a261' : colors.neutralDisabled }}
             disabled={!affordable}
             onClick={() => buyPrestigeUpgrade(def.id)}
           >
@@ -226,7 +246,7 @@ function LocationCards() {
   const switchLocation = useGameStore((s) => s.switchLocation)
 
   return (
-    <div style={cardRowStyle}>
+    <div style={cardGridStyle}>
       {LOCATION_THEMES.map((theme) => {
         const unlocked = isLocationUnlocked(theme.id)
         const owned = Object.values(locations).find((l) => l.themeId === theme.id)
@@ -237,7 +257,7 @@ function LocationCards() {
           return (
             <button
               key={theme.id}
-              style={{ ...cardStyle, background: isActive ? '#2b2d42' : '#3d5a80' }}
+              style={{ ...cardStyle, background: isActive ? '#2b2d42' : colors.primary }}
               disabled={isActive}
               onClick={() => switchLocation(owned.id)}
             >
@@ -250,7 +270,7 @@ function LocationCards() {
         return (
           <button
             key={theme.id}
-            style={{ ...cardStyle, background: affordable ? '#9b5de5' : '#8a8a8a' }}
+            style={{ ...cardStyle, background: affordable ? colors.purple : colors.neutralDisabled }}
             disabled={!affordable}
             onClick={() => unlockLocation(theme.id)}
           >
@@ -263,33 +283,107 @@ function LocationCards() {
   )
 }
 
+function computeExpandedHeight(): number {
+  return Math.min(window.innerHeight * 0.55, 480)
+}
+
 export function ShopPanel() {
   const [tab, setTab] = useState<Tab>('rooms')
+  const [expanded, setExpanded] = useState(false)
+  const [dragHeight, setDragHeight] = useState<number | null>(null)
+  const [expandedHeightPx, setExpandedHeightPx] = useState(computeExpandedHeight)
+
+  useEffect(() => {
+    const onResize = () => setExpandedHeightPx(computeExpandedHeight())
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const isDragging = dragHeight !== null
+  const contentHeight = dragHeight ?? (expanded ? expandedHeightPx : 0)
+  const sheetVisible = expanded || contentHeight > 0
+
+  function handleTabTap(next: Tab) {
+    if (!expanded) {
+      setTab(next)
+      setExpanded(true)
+    } else if (tab === next) {
+      setExpanded(false)
+    } else {
+      setTab(next)
+    }
+  }
+
+  function onHeaderPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    const state = { startY: e.clientY, startHeight: expanded ? expandedHeightPx : 0, dragging: false }
+
+    function onMove(ev: PointerEvent) {
+      const delta = ev.clientY - state.startY
+      if (!state.dragging && Math.abs(delta) > TAP_THRESHOLD_PX) state.dragging = true
+      if (state.dragging) {
+        setDragHeight(Math.min(expandedHeightPx, Math.max(0, state.startHeight - delta)))
+      }
+    }
+    function onUp(ev: PointerEvent) {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      if (state.dragging) {
+        const delta = ev.clientY - state.startY
+        const finalHeight = Math.min(expandedHeightPx, Math.max(0, state.startHeight - delta))
+        setExpanded(finalHeight > expandedHeightPx * SNAP_FRACTION)
+        setDragHeight(null)
+      }
+      // Not dragging → this was a plain tap; the child button's own onClick
+      // (a tab, or the handle nub) already handled it natively — we never
+      // called setPointerCapture, so nothing here needs to replay that.
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
 
   return (
-    <div style={panelStyle}>
-      <div style={tabRowStyle}>
-        <button style={tabButtonStyle(tab === 'rooms')} onClick={() => setTab('rooms')}>
-          🏨 Rooms
-        </button>
-        <button style={tabButtonStyle(tab === 'staff')} onClick={() => setTab('staff')}>
-          🧑‍💼 Staff
-        </button>
-        <button style={tabButtonStyle(tab === 'upgrades')} onClick={() => setTab('upgrades')}>
-          ⭐ Upgrades
-        </button>
-        <button style={tabButtonStyle(tab === 'prestige')} onClick={() => setTab('prestige')}>
-          👑 Prestige
-        </button>
-        <button style={tabButtonStyle(tab === 'locations')} onClick={() => setTab('locations')}>
-          🗺️ Locations
-        </button>
+    <>
+      {/* A true sibling of `panelStyle`'s div, not nested inside it: the panel
+          div is only bottom/left/right-positioned (auto height, hugging its
+          own content), so an `inset:0` backdrop nested inside it would only
+          cover the sheet's own footprint, not the full screen. */}
+      {sheetVisible && <div style={modalBackdropStyle} onClick={() => setExpanded(false)} />}
+      <div style={panelStyle}>
+        <div style={headerStyle} onPointerDown={onHeaderPointerDown}>
+          <button style={handleNubStyle} onClick={() => setExpanded((e) => !e)} aria-label="Toggle shop panel" />
+          <div style={tabRowStyle}>
+            <button style={tabButtonStyle(tab === 'rooms')} onClick={() => handleTabTap('rooms')}>
+              🏨 Rooms
+            </button>
+            <button style={tabButtonStyle(tab === 'staff')} onClick={() => handleTabTap('staff')}>
+              🧑‍💼 Staff
+            </button>
+            <button style={tabButtonStyle(tab === 'upgrades')} onClick={() => handleTabTap('upgrades')}>
+              ⭐ Upgrades
+            </button>
+            <button style={tabButtonStyle(tab === 'prestige')} onClick={() => handleTabTap('prestige')}>
+              👑 Prestige
+            </button>
+            <button style={tabButtonStyle(tab === 'locations')} onClick={() => handleTabTap('locations')}>
+              🗺️ Locations
+            </button>
+          </div>
+        </div>
+        <div
+          style={{
+            maxHeight: `${contentHeight}px`,
+            overflowY: 'auto',
+            touchAction: 'pan-y',
+            transition: isDragging ? 'none' : 'max-height 240ms cubic-bezier(0.22, 1, 0.36, 1)',
+          }}
+        >
+          {tab === 'rooms' && <RoomCards />}
+          {tab === 'staff' && <StaffCards />}
+          {tab === 'upgrades' && <UpgradeCards />}
+          {tab === 'prestige' && <PrestigeUpgradeCards />}
+          {tab === 'locations' && <LocationCards />}
+        </div>
       </div>
-      {tab === 'rooms' && <RoomCards />}
-      {tab === 'staff' && <StaffCards />}
-      {tab === 'upgrades' && <UpgradeCards />}
-      {tab === 'prestige' && <PrestigeUpgradeCards />}
-      {tab === 'locations' && <LocationCards />}
-    </div>
+    </>
   )
 }
