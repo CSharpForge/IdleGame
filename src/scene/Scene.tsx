@@ -4,6 +4,7 @@ import { useGameStore } from '../game/state/store'
 import { getLocationThemeDef } from '../game/data/locationThemes'
 import { Building } from './hotel/Building'
 import { GuestSimulation } from './guests/GuestSimulation'
+import { orbitControlsRef } from './cameraControls'
 
 export function Scene() {
   const themeId = useGameStore((s) => s.activeLocation().themeId)
@@ -32,6 +33,7 @@ export function Scene() {
       </Selection>
 
       <OrbitControls
+        ref={orbitControlsRef}
         enablePan={false}
         minDistance={4}
         maxDistance={24}

@@ -8,6 +8,12 @@ import { GuestAgent } from './GuestAgent'
 
 const GuestECS = createReactAPI(guestWorld)
 
+// A hard ceiling on simultaneous visible guests. Income never depends on
+// literal guest count (see economyTick.ts's closed-form occupancy math), so
+// this only bounds render/outline-pass cost on a very large, very lucky-RNG
+// hotel — it doesn't change earnings at all.
+const MAX_CONCURRENT_GUESTS = 40
+
 function GuestSpawnerAndReaper() {
   const claimCheckAccumulator = useRef(0)
 
@@ -25,12 +31,11 @@ function GuestSpawnerAndReaper() {
     const stepSeconds = claimCheckAccumulator.current
     claimCheckAccumulator.current = 0
 
+    const liveEntities = [...guestWorld.entities].filter((e) => e.phase !== 'done')
+    if (liveEntities.length >= MAX_CONCURRENT_GUESTS) return
+
     const { floors, rooms } = useGameStore.getState().activeLocation()
-    const claimedRoomIds = new Set(
-      [...guestWorld.entities]
-        .filter((e) => e.phase !== 'done')
-        .map((e) => e.roomId),
-    )
+    const claimedRoomIds = new Set(liveEntities.map((e) => e.roomId))
 
     for (const floor of floors) {
       for (const roomId of floor.roomIds) {

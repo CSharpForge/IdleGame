@@ -91,6 +91,10 @@ Guests move via a `CatmullRomCurve3` through a handful of fixed waypoints (`src/
 
 drei's `<Edges>` (used for ghost room-slot outlines in `Floor.tsx`) needs its parent mesh to stay in the render tree. Hide the parent's *material* (`opacity={0}`), not the mesh (`visible={false}`) — Three.js stops traversing a node's children once the node itself is invisible, which would hide `<Edges>` too.
 
+`@react-spring/three`'s `animated.mesh` doesn't reliably interpolate a value passed through dash-notation piercing props (e.g. `position-y={spring.y}`) mixed with plain static siblings (`position-x`, `position-z`) — `CashBurst.tsx` silently rendered nothing this way (the effect fired, but coins never appeared) until rewritten to drive position/scale/opacity imperatively via a ref inside `useFrame`, the same pattern `GuestAgent.tsx` already uses. Prefer that ref+`useFrame` pattern over `@react-spring/three` for anything beyond a single top-level animated prop (`scale`, or a full `position` array/vector).
+
+**A one-shot 3D effect anchored to a room must sit *outside* the room's solid box geometry, not at a small local offset near zero.** `CashBurst`'s coins were originally placed at local `z=0.2`, which is inside the room mesh (which spans roughly `±(ROOM_DEPTH-0.15)/2 ≈ ±1.025` in local Z) and therefore fully occluded — invisible with no error, no warning, nothing in the console. It's positioned just in front of the window instead (`z ≈ (ROOM_DEPTH-0.15)/2 + 0.4`). When adding any new local-space effect to a room/guest, sanity-check its offset against the geometry it's local to, not just "is it roughly the right side."
+
 ### Data vs. logic vs. rendering
 
 Static balance numbers (costs, growth curves, guest timing) live in `src/game/data/roomTypes.ts`, separate from the systems that use them (`src/game/systems/`) and from rendering (`src/scene/`). This is the one file to touch when tuning game balance.

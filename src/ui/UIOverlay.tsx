@@ -1,5 +1,5 @@
 import { CurrencyDisplay } from './hud/CurrencyDisplay'
-import { MuteToggle } from './hud/MuteToggle'
+import { SettingsButton } from './hud/SettingsButton'
 import { SatisfactionBadge } from './hud/SatisfactionBadge'
 import { PrestigeButton } from './hud/PrestigeButton'
 import { EventBanner } from './hud/EventBanner'
@@ -20,7 +20,7 @@ export function UIOverlay() {
       <SatisfactionBadge />
       <PrestigeButton />
       <EventBanner />
-      <MuteToggle />
+      <SettingsButton />
       <ShopPanel />
       <OfflineEarningsModal />
       <AchievementToast />

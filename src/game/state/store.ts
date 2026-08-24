@@ -158,7 +158,9 @@ function globalIncomeMultiplier(state: GameState, event: ActiveEvent | null, now
  * fresh, isolated store (own localStorage key, own initial state) instead of
  * sharing — and polluting — one global singleton across test cases.
  */
-export function createGameStore(persistName = 'grand-stay-tycoon-save'): UseBoundStore<StoreApi<GameState>> {
+export const DEFAULT_SAVE_KEY = 'grand-stay-tycoon-save'
+
+export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoundStore<StoreApi<GameState>> {
   const starterLocationId = 'loc-starter'
 
   return create<GameState>()(

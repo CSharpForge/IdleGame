@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { animated } from '@react-spring/three'
 import { Select } from '@react-three/postprocessing'
 import type { Room as RoomData } from '../../types/entities'
@@ -5,8 +6,10 @@ import { getRoomTypeDef } from '../../game/data/roomTypes'
 import { ROOM_DEPTH, ROOM_HEIGHT, ROOM_WIDTH, roomCenterPosition } from './layout'
 import { useToonGradientMap } from '../materials/toonMaterial'
 import { useBuildPopIn } from './buildAnimation'
+import { CashBurst } from './CashBurst'
 
 const WINDOW_VACANT = '#2b2d42'
+const CASH_BURST_DURATION_MS = 900
 
 export function Room({ room }: { room: RoomData }) {
   const spring = useBuildPopIn(room.builtAt)
@@ -15,6 +18,23 @@ export function Room({ room }: { room: RoomData }) {
   const position = roomCenterPosition(room.floorIndex, room.slotIndex)
   const occupied = room.status === 'occupied'
   const height = ROOM_HEIGHT * typeDef.heightScale
+
+  const [burstId, setBurstId] = useState<number | null>(null)
+
+  // The effect only re-runs when `occupied` actually changes, so this fires
+  // exactly once per vacant->occupied transition (never on unrelated
+  // re-renders, and not again while it stays occupied). This genuinely is
+  // "synchronizing with an external system" (a self-expiring setTimeout
+  // driving a transient 3D effect) rather than deriving render output, so
+  // it belongs in an effect despite the general set-state-in-effect rule.
+  useEffect(() => {
+    if (!occupied) return
+    const id = Date.now()
+    // oxlint-disable-next-line react/set-state-in-effect
+    setBurstId(id)
+    const timeout = setTimeout(() => setBurstId((current) => (current === id ? null : current)), CASH_BURST_DURATION_MS)
+    return () => clearTimeout(timeout)
+  }, [occupied])
 
   return (
     <animated.group position={position} scale={spring.scale}>
@@ -32,6 +52,9 @@ export function Room({ room }: { room: RoomData }) {
           emissiveIntensity={occupied ? 0.8 : 0}
         />
       </mesh>
+      {burstId !== null && (
+        <CashBurst seed={burstId} position={[0, 0.5, (ROOM_DEPTH - 0.15) / 2 + 0.4]} />
+      )}
     </animated.group>
   )
 }
