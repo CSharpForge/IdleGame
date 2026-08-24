@@ -36,6 +36,13 @@ export function roomDoorPosition(floorIndex: number, slotIndex: number): Vec3 {
   return [slotX(slotIndex), floorBaseY(floorIndex), CORRIDOR_Z]
 }
 
+// Where a guest stands once inside the room — floor level (like
+// roomDoorPosition), not roomCenterPosition's vertical mid-height (which is
+// only correct for centering the room's box *mesh*, not for a guest's feet).
+export function roomStandingPosition(floorIndex: number, slotIndex: number): Vec3 {
+  return [slotX(slotIndex), floorBaseY(floorIndex), ROOM_Z]
+}
+
 export function elevatorPosition(floorIndex: number): Vec3 {
   return [ELEVATOR_X, floorBaseY(floorIndex), CORRIDOR_Z]
 }

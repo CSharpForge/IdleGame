@@ -2,8 +2,8 @@ import * as THREE from 'three'
 import {
   elevatorPosition,
   lobbyPosition,
-  roomCenterPosition,
   roomDoorPosition,
+  roomStandingPosition,
 } from '../hotel/layout'
 
 const JITTER = 0.35
@@ -26,9 +26,9 @@ export function buildArrivalPath(floorIndex: number, slotIndex: number, seed: nu
   const elevatorGround = jittered(elevatorPosition(0), seed + 1)
   const elevatorFloor = jittered(elevatorPosition(floorIndex), seed + 2)
   const door = jittered(roomDoorPosition(floorIndex, slotIndex), seed + 3)
-  const center = new THREE.Vector3(...roomCenterPosition(floorIndex, slotIndex))
+  const standing = new THREE.Vector3(...roomStandingPosition(floorIndex, slotIndex))
 
-  return new THREE.CatmullRomCurve3([lobby, elevatorGround, elevatorFloor, door, center])
+  return new THREE.CatmullRomCurve3([lobby, elevatorGround, elevatorFloor, door, standing])
 }
 
 export function buildDeparturePath(floorIndex: number, slotIndex: number, seed: number): THREE.CatmullRomCurve3 {
