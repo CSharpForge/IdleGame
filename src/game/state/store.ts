@@ -30,10 +30,18 @@ import {
 } from '../data/prestigeUpgradeDefs'
 import { getLocationThemeDef, LOCATION_THEMES } from '../data/locationThemes'
 import { EVENTS, EVENT_SPAWN_CHANCE_PER_SEC } from '../data/eventDefs'
-import { getNewlyUnlockedAchievements, type AchievementDef } from '../data/achievementDefs'
+import {
+  getNewlyUnlockedAchievements,
+  type AchievementDef,
+  type AchievementSnapshot,
+} from '../data/achievementDefs'
 import { simulateEconomyAcrossLocations, type EconomySnapshot } from '../systems/economyTick'
 import { computeOfflineEarnings } from '../systems/offlineEarnings'
-import { computeSatisfaction, managerEffectivenessMultiplier } from '../systems/satisfaction'
+import {
+  computeSatisfaction,
+  HIGH_SATISFACTION_THRESHOLD,
+  managerEffectivenessMultiplier,
+} from '../systems/satisfaction'
 import { upgradeIncomeMultiplier, upgradeSatisfactionBonus } from '../systems/upgrades'
 import {
   prestigeHeadStartBonus,
@@ -83,6 +91,12 @@ export interface GameState {
   prestigeCount: number
   prestigeUpgradeLevels: Record<PrestigeUpgradeId, number>
   activeEvent: ActiveEvent | null
+  eventsExperienced: number
+  /** Seconds satisfaction has stayed >= HIGH_SATISFACTION_THRESHOLD, live-ticking only. Resets on drop below. */
+  currentSatisfactionStreakSeconds: number
+  bestSatisfactionStreakSeconds: number
+  /** Live playtime only — offline catch-up deliberately does not count toward this. */
+  totalPlaytimeSeconds: number
 
   unlockedAchievementIds: string[]
   muted: boolean
@@ -192,6 +206,41 @@ function buildLocationSnapshots(
   })
 }
 
+function buildAchievementSnapshot(state: GameState): AchievementSnapshot {
+  const totalUpgradeLevels = Object.values(state.upgradeLevels).reduce((a, b) => a + b, 0)
+  const staffCountByRole: Partial<Record<StaffRole, number>> = {}
+  let totalStaff = 0
+  let totalFloors = 0
+  let wingExpansionsTotal = 0
+  let totalRoomsBuilt = 0
+  for (const location of Object.values(state.locations)) {
+    totalRoomsBuilt += Object.keys(location.rooms).length
+    totalFloors += location.floors.length
+    for (const floor of location.floors) {
+      wingExpansionsTotal += timesFloorExpanded(floor.slotCount)
+    }
+    for (const member of Object.values(location.staff)) {
+      totalStaff += 1
+      staffCountByRole[member.role] = (staffCountByRole[member.role] ?? 0) + 1
+    }
+  }
+
+  return {
+    totalRoomsBuilt,
+    totalFloors,
+    lifetimeEarned: state.lifetimeEarned,
+    staffCount: totalStaff,
+    staffCountByRole,
+    locationsUnlocked: Object.keys(state.locations).length,
+    prestigeCount: state.prestigeCount,
+    totalUpgradeLevels,
+    wingExpansionsTotal,
+    eventsExperienced: state.eventsExperienced,
+    bestSatisfactionStreakSeconds: state.bestSatisfactionStreakSeconds,
+    totalPlaytimeSeconds: state.totalPlaytimeSeconds,
+  }
+}
+
 function globalIncomeMultiplier(state: GameState, event: ActiveEvent | null, now: number): number {
   return (
     upgradeIncomeMultiplier(state.upgradeLevels.marketing, state.upgradeLevels.staffTraining) *
@@ -216,22 +265,7 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
       immer((set, get) => {
         function checkAchievements() {
           const state = get()
-          const totalUpgradeLevels = Object.values(state.upgradeLevels).reduce((a, b) => a + b, 0)
-          const totalFloors = Object.values(state.locations).reduce((sum, l) => sum + l.floors.length, 0)
-          const totalStaff = Object.values(state.locations).reduce((sum, l) => sum + Object.keys(l.staff).length, 0)
-
-          const newly = getNewlyUnlockedAchievements(
-            {
-              totalRoomsBuilt: state.totalRoomCountAllLocations(),
-              totalFloors,
-              lifetimeEarned: state.lifetimeEarned,
-              staffCount: totalStaff,
-              locationsUnlocked: Object.keys(state.locations).length,
-              prestigeCount: state.prestigeCount,
-              totalUpgradeLevels,
-            },
-            state.unlockedAchievementIds,
-          )
+          const newly = getNewlyUnlockedAchievements(buildAchievementSnapshot(state), state.unlockedAchievementIds)
           if (newly.length === 0) return
           set((draft) => {
             for (const achievement of newly) {
@@ -254,6 +288,10 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
           prestigeCount: 0,
           prestigeUpgradeLevels: { cheaperRooms: 0, headStart: 0, staffSynergy: 0, satisfactionFloor: 0 },
           activeEvent: null,
+          eventsExperienced: 0,
+          currentSatisfactionStreakSeconds: 0,
+          bestSatisfactionStreakSeconds: 0,
+          totalPlaytimeSeconds: 0,
           unlockedAchievementIds: [],
           muted: false,
           pendingOfflineEarnings: null,
@@ -512,14 +550,36 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
 
             let activeEvent = state.activeEvent
             if (activeEvent && !isEventActive(activeEvent, now)) activeEvent = null
+            let startedNewEvent = false
             if (!activeEvent && Math.random() < EVENT_SPAWN_CHANCE_PER_SEC * deltaSeconds) {
               const def = EVENTS[Math.floor(Math.random() * EVENTS.length)]
               activeEvent = { id: def.id, endsAt: now + def.durationSeconds * 1000 }
+              startedNewEvent = true
             }
 
             const snapshots = buildLocationSnapshots(state, activeEvent, now)
             const multiplier = globalIncomeMultiplier(state, activeEvent, now)
             const { incomeEarned } = simulateEconomyAcrossLocations(snapshots, multiplier, deltaSeconds)
+
+            // Active-location-only satisfaction streak (see achievementDefs.ts's
+            // "five-star-streak") — a deliberate simplification vs. this
+            // codebase's usual empire-wide achievement philosophy: a player
+            // could dodge a struggling location by switching away from it,
+            // but tracking every owned location every tick is more state and
+            // more test surface than this milestone's scope warrants.
+            const conciergeBonus = upgradeSatisfactionBonus(state.upgradeLevels.concierge)
+            const staffSynergyBonus = prestigeStaffEffectivenessBonus(state.prestigeUpgradeLevels.staffSynergy)
+            const satisfactionFloorBonus = prestigeSatisfactionFloorBonus(
+              state.prestigeUpgradeLevels.satisfactionFloor,
+            )
+            const eventSatBonus = eventSatisfactionBonus(activeEvent, now)
+            const activeSatisfaction = locationSatisfaction(
+              state.activeLocation(),
+              conciergeBonus,
+              staffSynergyBonus,
+              satisfactionFloorBonus,
+              eventSatBonus,
+            )
 
             set((draft) => {
               draft.cash += incomeEarned
@@ -527,6 +587,18 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
               draft.lifetimeEarned += incomeEarned
               draft.lastTickTimestamp = now
               draft.activeEvent = activeEvent
+              // Live ticking only — offline catch-up (onRehydrateStorage) never
+              // touches this, so leaving the tab open overnight isn't "playtime".
+              draft.totalPlaytimeSeconds += deltaSeconds
+              if (startedNewEvent) draft.eventsExperienced += 1
+              if (activeSatisfaction >= HIGH_SATISFACTION_THRESHOLD) {
+                draft.currentSatisfactionStreakSeconds += deltaSeconds
+                if (draft.currentSatisfactionStreakSeconds > draft.bestSatisfactionStreakSeconds) {
+                  draft.bestSatisfactionStreakSeconds = draft.currentSatisfactionStreakSeconds
+                }
+              } else {
+                draft.currentSatisfactionStreakSeconds = 0
+              }
             })
             checkAchievements()
           },
@@ -554,6 +626,10 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
           prestigeCount: state.prestigeCount,
           prestigeUpgradeLevels: state.prestigeUpgradeLevels,
           activeEvent: state.activeEvent,
+          eventsExperienced: state.eventsExperienced,
+          currentSatisfactionStreakSeconds: state.currentSatisfactionStreakSeconds,
+          bestSatisfactionStreakSeconds: state.bestSatisfactionStreakSeconds,
+          totalPlaytimeSeconds: state.totalPlaytimeSeconds,
           unlockedAchievementIds: state.unlockedAchievementIds,
           muted: state.muted,
         }),
@@ -585,27 +661,8 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
             state.pendingOfflineEarnings = { incomeEarned, elapsedSeconds }
           }
 
-          const totalRoomsBuilt = Object.values(state.locations).reduce(
-            (sum, l) => sum + Object.keys(l.rooms).length,
-            0,
-          )
-          const totalFloors = Object.values(state.locations).reduce((sum, l) => sum + l.floors.length, 0)
-          const totalStaff = Object.values(state.locations).reduce(
-            (sum, l) => sum + Object.keys(l.staff).length,
-            0,
-          )
-          const totalUpgradeLevels = Object.values(state.upgradeLevels).reduce((a, b) => a + b, 0)
-
           const newlyUnlocked = getNewlyUnlockedAchievements(
-            {
-              totalRoomsBuilt,
-              totalFloors,
-              lifetimeEarned: state.lifetimeEarned,
-              staffCount: totalStaff,
-              locationsUnlocked: Object.keys(state.locations).length,
-              prestigeCount: state.prestigeCount,
-              totalUpgradeLevels,
-            },
+            buildAchievementSnapshot(state),
             state.unlockedAchievementIds,
           )
           if (newlyUnlocked.length > 0) {

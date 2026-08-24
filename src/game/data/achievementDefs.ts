@@ -1,11 +1,18 @@
+import type { StaffRole } from '../../types/entities'
+
 export interface AchievementSnapshot {
   totalRoomsBuilt: number
   totalFloors: number
   lifetimeEarned: number
   staffCount: number
+  staffCountByRole: Partial<Record<StaffRole, number>>
   locationsUnlocked: number
   prestigeCount: number
   totalUpgradeLevels: number
+  wingExpansionsTotal: number
+  eventsExperienced: number
+  bestSatisfactionStreakSeconds: number
+  totalPlaytimeSeconds: number
 }
 
 export interface AchievementDef {
@@ -87,6 +94,48 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     label: 'Fresh Start',
     description: 'Prestige for the first time.',
     isUnlocked: (s) => s.prestigeCount >= 1,
+  },
+  {
+    id: 'hire-a-manager',
+    label: 'Middle Management',
+    description: 'Hire your first manager.',
+    isUnlocked: (s) => (s.staffCountByRole.manager ?? 0) >= 1,
+  },
+  {
+    id: 'wing-expander',
+    label: 'Room to Grow',
+    description: 'Expand a floor with a wing for the first time.',
+    isUnlocked: (s) => s.wingExpansionsTotal >= 1,
+  },
+  {
+    id: 'wing-master',
+    label: 'Sprawling Complex',
+    description: 'Expand wings 8 times across your locations.',
+    isUnlocked: (s) => s.wingExpansionsTotal >= 8,
+  },
+  {
+    id: 'party-goer',
+    label: 'Party Goer',
+    description: 'Experience 5 timed events.',
+    isUnlocked: (s) => s.eventsExperienced >= 5,
+  },
+  {
+    id: 'event-veteran',
+    label: 'Event Veteran',
+    description: 'Experience 25 timed events.',
+    isUnlocked: (s) => s.eventsExperienced >= 25,
+  },
+  {
+    id: 'five-star-streak',
+    label: 'Five-Star Service',
+    description: 'Keep satisfaction at 90%+ for 5 minutes straight.',
+    isUnlocked: (s) => s.bestSatisfactionStreakSeconds >= 300,
+  },
+  {
+    id: 'dedicated-owner',
+    label: 'Dedicated Owner',
+    description: 'Play for a total of 1 hour.',
+    isUnlocked: (s) => s.totalPlaytimeSeconds >= 3600,
   },
 ]
 

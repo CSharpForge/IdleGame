@@ -10,6 +10,11 @@ const BASELINE_SATISFACTION = 0.5
 const MIN_INCOME_MULTIPLIER = 0.6
 const MAX_SATISFACTION_BONUS = 0.4
 
+// Threshold for the "five-star streak" achievement (see achievementDefs.ts)
+// — high enough that it takes real staffing investment to sustain, not just
+// the 0.5 baseline.
+export const HIGH_SATISFACTION_THRESHOLD = 0.9
+
 /**
  * Satisfaction is a 0..1 score with a 0.5 floor even at zero housekeeping
  * coverage — an unstaffed hotel should feel suboptimal, not broken.

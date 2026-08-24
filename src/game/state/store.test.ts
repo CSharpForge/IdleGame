@@ -713,6 +713,14 @@ describe('offline earnings on rehydration', () => {
     expect(rehydrated.getState().activeEvent).toBeNull()
   })
 
+  it('does not count a long offline gap as playtime', () => {
+    seedV3Save('test-save-offline-playtime')
+    const rehydrated = createGameStore('test-save-offline-playtime')
+    // The seeded gap is 2 hours (7200s) — if offline catch-up counted as
+    // playtime, this would be ~7200 instead of 0.
+    expect(rehydrated.getState().totalPlaytimeSeconds).toBe(0)
+  })
+
   it('dismissOfflineEarnings clears the pending summary', () => {
     seedV3Save('test-save-dismiss')
     const rehydrated = createGameStore('test-save-dismiss')
@@ -785,5 +793,59 @@ describe('events affecting satisfaction/room cost', () => {
     expect(bothCost).toBeLessThan(perkOnlyCost)
     // Multiplicative composition, not double-subtracted: base * 0.91 (perk) * 0.8 (event).
     expect(bothCost).toBe(Math.round(baseCost * 0.91 * 0.8))
+  })
+})
+
+describe('playtime, satisfaction streak, and eventsExperienced tracking', () => {
+  it('totalPlaytimeSeconds accumulates via live ticks', () => {
+    expect(store.getState().totalPlaytimeSeconds).toBe(0)
+    store.getState().tickEconomy(10)
+    expect(store.getState().totalPlaytimeSeconds).toBe(10)
+    store.getState().tickEconomy(5)
+    expect(store.getState().totalPlaytimeSeconds).toBe(15)
+  })
+
+  it('satisfaction streak accumulates while satisfaction stays at/above the threshold', () => {
+    // A fresh, empty location is at 100% satisfaction (see satisfaction() semantics).
+    expect(store.getState().satisfaction()).toBe(1)
+    store.getState().tickEconomy(60)
+    expect(store.getState().currentSatisfactionStreakSeconds).toBe(60)
+    expect(store.getState().bestSatisfactionStreakSeconds).toBe(60)
+    store.getState().tickEconomy(30)
+    expect(store.getState().currentSatisfactionStreakSeconds).toBe(90)
+    expect(store.getState().bestSatisfactionStreakSeconds).toBe(90)
+  })
+
+  it('satisfaction streak resets to 0 once satisfaction drops below the threshold, but best is preserved', () => {
+    store.getState().tickEconomy(60)
+    expect(store.getState().bestSatisfactionStreakSeconds).toBe(60)
+
+    // Drop satisfaction below the high-satisfaction threshold by adding
+    // enough unstaffed rooms to bring it down toward the 0.5 floor.
+    store.setState({ cash: 1_000_000 })
+    for (let i = 0; i < 8; i++) {
+      store.getState().buyRoom('standard')
+      if (i % 4 === 3) store.getState().buyFloor()
+    }
+    expect(store.getState().satisfaction()).toBeLessThan(0.9)
+
+    store.getState().tickEconomy(10)
+    expect(store.getState().currentSatisfactionStreakSeconds).toBe(0)
+    expect(store.getState().bestSatisfactionStreakSeconds).toBe(60)
+  })
+
+  it('eventsExperienced increments exactly once per newly-started event', () => {
+    // Force the event-spawn roll to always succeed.
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    expect(store.getState().eventsExperienced).toBe(0)
+
+    store.getState().tickEconomy(1)
+    expect(store.getState().eventsExperienced).toBe(1)
+    expect(store.getState().activeEvent).not.toBeNull()
+
+    // While the same event is still active, further ticks must not
+    // increment the counter again.
+    store.getState().tickEconomy(1)
+    expect(store.getState().eventsExperienced).toBe(1)
   })
 })

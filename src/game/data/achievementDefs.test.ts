@@ -6,9 +6,14 @@ const emptySnapshot = {
   totalFloors: 1,
   lifetimeEarned: 0,
   staffCount: 0,
+  staffCountByRole: {},
   locationsUnlocked: 1,
   prestigeCount: 0,
   totalUpgradeLevels: 0,
+  wingExpansionsTotal: 0,
+  eventsExperienced: 0,
+  bestSatisfactionStreakSeconds: 0,
+  totalPlaytimeSeconds: 0,
 }
 
 describe('ACHIEVEMENTS', () => {
@@ -42,9 +47,14 @@ describe('getNewlyUnlockedAchievements', () => {
       totalFloors: 2,
       lifetimeEarned: 1000,
       staffCount: 1,
+      staffCountByRole: { manager: 1 },
       locationsUnlocked: 2,
       prestigeCount: 1,
       totalUpgradeLevels: 1,
+      wingExpansionsTotal: 1,
+      eventsExperienced: 5,
+      bestSatisfactionStreakSeconds: 300,
+      totalPlaytimeSeconds: 3600,
     }
     const newly = getNewlyUnlockedAchievements(snapshot, [])
     const ids = newly.map((a) => a.id)
@@ -59,6 +69,11 @@ describe('getNewlyUnlockedAchievements', () => {
         'first-upgrade',
         'second-location',
         'first-prestige',
+        'hire-a-manager',
+        'wing-expander',
+        'party-goer',
+        'five-star-streak',
+        'dedicated-owner',
       ]),
     )
   })
@@ -78,9 +93,14 @@ describe('getNewlyUnlockedAchievements', () => {
       totalFloors: 99,
       lifetimeEarned: 1_000_000,
       staffCount: 99,
+      staffCountByRole: { manager: 99 },
       locationsUnlocked: 4,
       prestigeCount: 99,
       totalUpgradeLevels: 99,
+      wingExpansionsTotal: 99,
+      eventsExperienced: 999,
+      bestSatisfactionStreakSeconds: 99_999,
+      totalPlaytimeSeconds: 999_999,
     }
     const allIds = ACHIEVEMENTS.map((a) => a.id)
     expect(getNewlyUnlockedAchievements(snapshot, allIds)).toEqual([])
