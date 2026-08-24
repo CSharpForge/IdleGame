@@ -2,9 +2,11 @@ import { useState, type CSSProperties } from 'react'
 import { useGameStore } from '../../game/state/store'
 import { ROOM_TYPES } from '../../game/data/roomTypes'
 import { STAFF_ROLES } from '../../game/data/staffDefs'
+import { UPGRADES } from '../../game/data/upgradeDefs'
+import { LOCATION_THEMES } from '../../game/data/locationThemes'
 import { formatNumber } from '../../utils/formatNumber'
 
-type Tab = 'rooms' | 'staff'
+type Tab = 'rooms' | 'staff' | 'upgrades' | 'locations'
 
 const panelStyle: CSSProperties = {
   position: 'absolute',
@@ -28,7 +30,7 @@ const tabButtonStyle = (active: boolean): CSSProperties => ({
   borderRadius: '10px',
   border: 'none',
   fontWeight: 700,
-  fontSize: '13px',
+  fontSize: '12px',
   background: active ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.35)',
   color: '#fff',
 })
@@ -57,15 +59,14 @@ const cardStyle: CSSProperties = {
 
 function RoomCards() {
   const cash = useGameStore((s) => s.cash)
-  const rooms = useGameStore((s) => s.rooms)
-  const floors = useGameStore((s) => s.floors)
+  const location = useGameStore((s) => s.activeLocation())
   const buyRoom = useGameStore((s) => s.buyRoom)
   const buyFloor = useGameStore((s) => s.buyFloor)
   const nextRoomCost = useGameStore((s) => s.nextRoomCost)
   const nextFloorCost = useGameStore((s) => s.nextFloorCost())
 
-  const totalRooms = Object.keys(rooms).length
-  const floorHasSpace = floors.some((f) => f.roomIds.length < f.slotCount)
+  const totalRooms = Object.keys(location.rooms).length
+  const floorHasSpace = location.floors.some((f) => f.roomIds.length < f.slotCount)
   const canBuyFloor = cash >= nextFloorCost
 
   return (
@@ -134,6 +135,84 @@ function StaffCards() {
   )
 }
 
+function UpgradeCards() {
+  const cash = useGameStore((s) => s.cash)
+  const upgradeLevels = useGameStore((s) => s.upgradeLevels)
+  const buyUpgrade = useGameStore((s) => s.buyUpgrade)
+  const nextUpgradeCost = useGameStore((s) => s.nextUpgradeCost)
+
+  return (
+    <div style={cardRowStyle}>
+      {UPGRADES.map((def) => {
+        const level = upgradeLevels[def.id]
+        const maxed = level >= def.maxLevel
+        const cost = nextUpgradeCost(def.id)
+        const affordable = !maxed && cash >= cost
+        return (
+          <button
+            key={def.id}
+            style={{ ...cardStyle, background: affordable ? '#e07a5f' : '#8a8a8a' }}
+            disabled={!affordable}
+            onClick={() => buyUpgrade(def.id)}
+          >
+            <span style={{ fontWeight: 700 }}>
+              {def.label} (Lv {level}/{def.maxLevel})
+            </span>
+            <span style={{ fontSize: '11px' }}>{maxed ? 'Maxed out' : def.description}</span>
+            {!maxed && <span style={{ fontSize: '12px' }}>${formatNumber(cost)}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function LocationCards() {
+  const cash = useGameStore((s) => s.cash)
+  const locations = useGameStore((s) => s.locations)
+  const activeLocationId = useGameStore((s) => s.activeLocationId)
+  const isLocationUnlocked = useGameStore((s) => s.isLocationUnlocked)
+  const unlockLocation = useGameStore((s) => s.unlockLocation)
+  const switchLocation = useGameStore((s) => s.switchLocation)
+
+  return (
+    <div style={cardRowStyle}>
+      {LOCATION_THEMES.map((theme) => {
+        const unlocked = isLocationUnlocked(theme.id)
+        const owned = Object.values(locations).find((l) => l.themeId === theme.id)
+        const isActive = owned?.id === activeLocationId
+        const affordable = !unlocked && cash >= theme.unlockCost
+
+        if (unlocked && owned) {
+          return (
+            <button
+              key={theme.id}
+              style={{ ...cardStyle, background: isActive ? '#2b2d42' : '#3d5a80' }}
+              disabled={isActive}
+              onClick={() => switchLocation(owned.id)}
+            >
+              <span style={{ fontWeight: 700 }}>{theme.label}</span>
+              <span style={{ fontSize: '12px' }}>{isActive ? 'Viewing now' : 'Switch here'}</span>
+            </button>
+          )
+        }
+
+        return (
+          <button
+            key={theme.id}
+            style={{ ...cardStyle, background: affordable ? '#9b5de5' : '#8a8a8a' }}
+            disabled={!affordable}
+            onClick={() => unlockLocation(theme.id)}
+          >
+            <span style={{ fontWeight: 700 }}>🔒 {theme.label}</span>
+            <span style={{ fontSize: '12px' }}>${formatNumber(theme.unlockCost)}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export function ShopPanel() {
   const [tab, setTab] = useState<Tab>('rooms')
 
@@ -146,8 +225,17 @@ export function ShopPanel() {
         <button style={tabButtonStyle(tab === 'staff')} onClick={() => setTab('staff')}>
           🧑‍💼 Staff
         </button>
+        <button style={tabButtonStyle(tab === 'upgrades')} onClick={() => setTab('upgrades')}>
+          ⭐ Upgrades
+        </button>
+        <button style={tabButtonStyle(tab === 'locations')} onClick={() => setTab('locations')}>
+          🗺️ Locations
+        </button>
       </div>
-      {tab === 'rooms' ? <RoomCards /> : <StaffCards />}
+      {tab === 'rooms' && <RoomCards />}
+      {tab === 'staff' && <StaffCards />}
+      {tab === 'upgrades' && <UpgradeCards />}
+      {tab === 'locations' && <LocationCards />}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import type { RoomTypeId } from '../../types/entities'
 import { GUEST_SPAWN_CHANCE_PER_SEC, GUEST_STAY_SECONDS, getRoomTypeDef } from '../data/roomTypes'
 import { incomeMultiplierFromSatisfaction, receptionistIncomeMultiplier } from './satisfaction'
 
+/** Describes one hotel location's room mix and staffing for a single tick. */
 export interface EconomySnapshot {
   roomCounts: Partial<Record<RoomTypeId, number>>
   satisfaction: number
@@ -21,11 +22,9 @@ export interface EconomyResult {
 const STEADY_STATE_OCCUPANCY = Math.min(1, GUEST_SPAWN_CHANCE_PER_SEC * GUEST_STAY_SECONDS)
 
 /**
- * Satisfaction and staffing are read at the moment this is called and
- * treated as constant over deltaSeconds — including across an offline-catch-up
- * gap. That's a deliberate simplification (current staffing retroactively
- * applies to the whole away period) rather than modeling historical staffing
- * changes, and it's what keeps this function closed-form/linear in delta.
+ * Income for ONE hotel location. Satisfaction/staffing are read once per
+ * call and treated as constant over deltaSeconds — including across an
+ * offline gap — which is what keeps this closed-form/linear in delta.
  */
 export function simulateEconomy(snapshot: EconomySnapshot, deltaSeconds: number): EconomyResult {
   if (deltaSeconds <= 0) {
@@ -44,8 +43,26 @@ export function simulateEconomy(snapshot: EconomySnapshot, deltaSeconds: number)
   const satisfactionMultiplier = incomeMultiplierFromSatisfaction(snapshot.satisfaction)
   const staffMultiplier = receptionistIncomeMultiplier(snapshot.receptionistCount)
 
-  const incomeEarned =
-    baseIncomePerSec * STEADY_STATE_OCCUPANCY * satisfactionMultiplier * staffMultiplier * deltaSeconds
+  const incomeEarned = baseIncomePerSec * STEADY_STATE_OCCUPANCY * satisfactionMultiplier * staffMultiplier * deltaSeconds
 
   return { incomeEarned }
+}
+
+/**
+ * All owned hotel locations earn simultaneously (idle-game convention — an
+ * empire keeps running, not just the location you're currently viewing).
+ * Each location has its own room mix/satisfaction/staff, summed here, then
+ * scaled once by empire-wide multipliers (upgrades, prestige, active event).
+ * Still linear in deltaSeconds: a sum of linear functions times a constant.
+ */
+export function simulateEconomyAcrossLocations(
+  locationSnapshots: EconomySnapshot[],
+  globalIncomeMultiplier: number,
+  deltaSeconds: number,
+): EconomyResult {
+  let total = 0
+  for (const snapshot of locationSnapshots) {
+    total += simulateEconomy(snapshot, deltaSeconds).incomeEarned
+  }
+  return { incomeEarned: total * globalIncomeMultiplier }
 }

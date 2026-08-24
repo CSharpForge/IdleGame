@@ -1,4 +1,5 @@
 import { useGameStore } from '../../game/state/store'
+import { getLocationThemeDef } from '../../game/data/locationThemes'
 import { ELEVATOR_X, FLOOR_HEIGHT, floorSlabSize } from './layout'
 import { Floor } from './Floor'
 
@@ -19,19 +20,19 @@ function ElevatorCore({ floorCount }: { floorCount: number }) {
 }
 
 export function Building() {
-  const floors = useGameStore((s) => s.floors)
-  const rooms = useGameStore((s) => s.rooms)
+  const location = useGameStore((s) => s.activeLocation())
   const [slabW] = floorSlabSize()
+  const theme = getLocationThemeDef(location.themeId)
 
   return (
     <group>
       <mesh position={[0, -0.15, -0.5]} receiveShadow>
         <boxGeometry args={[slabW + 4, 0.1, 12]} />
-        <meshStandardMaterial color="#7fb069" />
+        <meshStandardMaterial color={theme.groundColor} />
       </mesh>
-      <ElevatorCore floorCount={floors.length} />
-      {floors.map((floor) => (
-        <Floor key={floor.index} floor={floor} rooms={rooms} />
+      <ElevatorCore floorCount={location.floors.length} />
+      {location.floors.map((floor) => (
+        <Floor key={floor.index} floor={floor} rooms={location.rooms} />
       ))}
     </group>
   )

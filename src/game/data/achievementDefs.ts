@@ -1,8 +1,11 @@
 export interface AchievementSnapshot {
   totalRoomsBuilt: number
   totalFloors: number
-  totalEarned: number
+  lifetimeEarned: number
   staffCount: number
+  locationsUnlocked: number
+  prestigeCount: number
+  totalUpgradeLevels: number
 }
 
 export interface AchievementDef {
@@ -47,13 +50,43 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     id: 'earn-1000',
     label: 'First Thousand',
     description: 'Earn a total of $1,000.',
-    isUnlocked: (s) => s.totalEarned >= 1000,
+    isUnlocked: (s) => s.lifetimeEarned >= 1000,
   },
   {
     id: 'earn-10000',
     label: 'Big Business',
     description: 'Earn a total of $10,000.',
-    isUnlocked: (s) => s.totalEarned >= 10000,
+    isUnlocked: (s) => s.lifetimeEarned >= 10000,
+  },
+  {
+    id: 'earn-100000',
+    label: 'Hotel Tycoon',
+    description: 'Earn a total of $100,000.',
+    isUnlocked: (s) => s.lifetimeEarned >= 100_000,
+  },
+  {
+    id: 'first-upgrade',
+    label: 'Investing Wisely',
+    description: 'Purchase your first upgrade.',
+    isUnlocked: (s) => s.totalUpgradeLevels >= 1,
+  },
+  {
+    id: 'second-location',
+    label: 'Expanding the Empire',
+    description: 'Unlock a second hotel location.',
+    isUnlocked: (s) => s.locationsUnlocked >= 2,
+  },
+  {
+    id: 'all-locations',
+    label: 'Global Hospitality',
+    description: 'Unlock every hotel location.',
+    isUnlocked: (s) => s.locationsUnlocked >= 4,
+  },
+  {
+    id: 'first-prestige',
+    label: 'Fresh Start',
+    description: 'Prestige for the first time.',
+    isUnlocked: (s) => s.prestigeCount >= 1,
   },
 ]
 

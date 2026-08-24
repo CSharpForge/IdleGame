@@ -8,16 +8,35 @@ function validPersistedValue() {
     state: {
       cash: 100,
       totalEarned: 50,
+      lifetimeEarned: 50,
       lastTickTimestamp: Date.now(),
-      floors: [{ index: 0, roomIds: ['room-1'], slotCount: 4 }],
-      rooms: {
-        'room-1': { id: 'room-1', floorIndex: 0, slotIndex: 0, typeId: 'standard', status: 'vacant', builtAt: Date.now() },
+      locations: {
+        'loc-1': {
+          id: 'loc-1',
+          themeId: 'coastal',
+          floors: [{ index: 0, roomIds: ['room-1'], slotCount: 4 }],
+          rooms: {
+            'room-1': {
+              id: 'room-1',
+              floorIndex: 0,
+              slotIndex: 0,
+              typeId: 'standard',
+              status: 'vacant',
+              builtAt: Date.now(),
+            },
+          },
+          staff: {},
+        },
       },
-      staff: {},
+      activeLocationId: 'loc-1',
+      upgradeLevels: { marketing: 0, staffTraining: 0, concierge: 0 },
+      prestigePoints: 0,
+      prestigeCount: 0,
+      activeEvent: null,
       unlockedAchievementIds: [],
       muted: false,
     },
-    version: 2,
+    version: 3,
   }
 }
 
@@ -60,10 +79,12 @@ describe('createValidatedStorage (loose, pre-migration check)', () => {
     expect(storage.getItem(KEY)).toBeNull()
   })
 
-  it('passes through an older-version save missing newer fields, so migrate() can upgrade it', () => {
-    // No `typeId` on the room, no `staff`, no `unlockedAchievementIds` — a
-    // real pre-M2 save. The storage layer must NOT reject this; rejecting
-    // it here would silently wipe every existing save instead of migrating.
+  it('passes through an older-version (v1) save missing locations/upgrades/etc, so migrate() can upgrade it', () => {
+    // A real pre-M2 save: no typeId, no staff, no locations at all — just
+    // top-level floors/rooms. The storage layer must NOT reject this;
+    // rejecting it here would silently wipe every existing save instead of
+    // migrating it. Only the fields common to every save version are
+    // checked at this layer (cash/totalEarned/lastTickTimestamp).
     const oldShape = {
       state: {
         cash: 100,
@@ -86,22 +107,47 @@ describe('persistedStateSchema (strict, post-migration check)', () => {
     expect(persistedStateSchema.safeParse(validPersistedValue().state).success).toBe(true)
   })
 
+  it('rejects a save missing locations', () => {
+    const value = validPersistedValue()
+    // @ts-expect-error deliberately corrupting the shape for the test
+    delete value.state.locations
+    expect(persistedStateSchema.safeParse(value.state).success).toBe(false)
+  })
+
   it('rejects a room missing typeId', () => {
     const value = validPersistedValue()
     // @ts-expect-error deliberately corrupting the shape for the test
-    delete value.state.rooms['room-1'].typeId
+    delete value.state.locations['loc-1'].rooms['room-1'].typeId
     expect(persistedStateSchema.safeParse(value.state).success).toBe(false)
   })
 
   it('rejects an invalid room status value', () => {
     const value = validPersistedValue()
-    value.state.rooms['room-1'].status = 'on-fire'
+    value.state.locations['loc-1'].rooms['room-1'].status = 'on-fire'
     expect(persistedStateSchema.safeParse(value.state).success).toBe(false)
   })
 
   it('rejects an invalid staff role', () => {
     const value = validPersistedValue()
-    value.state.staff = { s1: { id: 's1', role: 'chef', hiredAt: 1 } }
+    value.state.locations['loc-1'].staff = { s1: { id: 's1', role: 'chef', hiredAt: 1 } }
     expect(persistedStateSchema.safeParse(value.state).success).toBe(false)
+  })
+
+  it('rejects an invalid location theme id', () => {
+    const value = validPersistedValue()
+    value.state.locations['loc-1'].themeId = 'space_station'
+    expect(persistedStateSchema.safeParse(value.state).success).toBe(false)
+  })
+
+  it('rejects an invalid active event id', () => {
+    const value = validPersistedValue()
+    // @ts-expect-error deliberately corrupting the shape for the test
+    value.state.activeEvent = { id: 'made_up_event', endsAt: Date.now() }
+    expect(persistedStateSchema.safeParse(value.state).success).toBe(false)
+  })
+
+  it('accepts a null activeEvent', () => {
+    const value = validPersistedValue()
+    expect(persistedStateSchema.safeParse(value.state).success).toBe(true)
   })
 })

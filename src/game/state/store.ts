@@ -1,16 +1,30 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
-import type { Floor, Room, RoomStatus, RoomTypeId, StaffMember, StaffRole } from '../../types/entities'
+import type {
+  HotelLocation,
+  LocationThemeId,
+  Room,
+  RoomStatus,
+  RoomTypeId,
+  StaffMember,
+  StaffRole,
+} from '../../types/entities'
 import { floorCost, isRoomTypeUnlocked, roomCost, ROOMS_PER_FLOOR } from '../data/roomTypes'
 import { staffCost } from '../data/staffDefs'
+import { isUpgradeMaxed, upgradeCost, type UpgradeId } from '../data/upgradeDefs'
+import { getLocationThemeDef, LOCATION_THEMES } from '../data/locationThemes'
+import { EVENTS, EVENT_SPAWN_CHANCE_PER_SEC } from '../data/eventDefs'
 import { getNewlyUnlockedAchievements, type AchievementDef } from '../data/achievementDefs'
-import { simulateEconomy, type EconomySnapshot } from '../systems/economyTick'
+import { simulateEconomyAcrossLocations, type EconomySnapshot } from '../systems/economyTick'
 import { computeOfflineEarnings } from '../systems/offlineEarnings'
 import { computeSatisfaction } from '../systems/satisfaction'
+import { upgradeIncomeMultiplier, upgradeSatisfactionBonus } from '../systems/upgrades'
+import { prestigeIncomeMultiplier, prestigePointsForTotalEarned } from '../systems/prestige'
+import { eventIncomeMultiplier, isEventActive, type ActiveEvent } from '../systems/events'
 import { createValidatedStorage } from '../systems/saveLoad'
 import { CURRENT_SAVE_VERSION, migrateSave } from '../systems/migrations'
-import { playAchievementSound, playPurchaseSound } from '../audio/soundManager'
+import { playAchievementSound, playPrestigeSound, playPurchaseSound } from '../audio/soundManager'
 
 function generateId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -21,13 +35,26 @@ interface OfflineEarningsSummary {
   elapsedSeconds: number
 }
 
+export interface UpgradeLevels {
+  marketing: number
+  staffTraining: number
+  concierge: number
+}
+
 export interface GameState {
   cash: number
   totalEarned: number
+  lifetimeEarned: number
   lastTickTimestamp: number
-  floors: Floor[]
-  rooms: Record<string, Room>
-  staff: Record<string, StaffMember>
+
+  locations: Record<string, HotelLocation>
+  activeLocationId: string
+
+  upgradeLevels: UpgradeLevels
+  prestigePoints: number
+  prestigeCount: number
+  activeEvent: ActiveEvent | null
+
   unlockedAchievementIds: string[]
   muted: boolean
 
@@ -37,7 +64,9 @@ export interface GameState {
   pendingAchievements: AchievementDef[]
   dismissTopAchievement: () => void
 
+  activeLocation: () => HotelLocation
   totalRoomCount: () => number
+  totalRoomCountAllLocations: () => number
   roomCountsByType: () => Partial<Record<RoomTypeId, number>>
   staffCountByRole: (role: StaffRole) => number
   satisfaction: () => number
@@ -45,17 +74,30 @@ export interface GameState {
   nextRoomCost: (typeId: RoomTypeId) => number
   nextFloorCost: () => number
   nextStaffCost: (role: StaffRole) => number
+  nextUpgradeCost: (id: UpgradeId) => number
+  isLocationUnlocked: (themeId: LocationThemeId) => boolean
+  prestigePreview: () => number
 
   buyRoom: (typeId: RoomTypeId) => boolean
   buyFloor: () => boolean
   hireStaff: (role: StaffRole) => boolean
   setRoomStatus: (roomId: string, status: RoomStatus) => void
+  buyUpgrade: (id: UpgradeId) => boolean
+  unlockLocation: (themeId: LocationThemeId) => boolean
+  switchLocation: (locationId: string) => void
+  prestige: () => boolean
   tickEconomy: (deltaSeconds: number) => void
   toggleMuted: () => void
 }
 
-function makeInitialFloors(): Floor[] {
-  return [{ index: 0, roomIds: [], slotCount: ROOMS_PER_FLOOR }]
+function makeStarterLocation(id: string): HotelLocation {
+  return {
+    id,
+    themeId: LOCATION_THEMES[0].id,
+    floors: [{ index: 0, roomIds: [], slotCount: ROOMS_PER_FLOOR }],
+    rooms: {},
+    staff: {},
+  }
 }
 
 function countByType(rooms: Record<string, Room>): Partial<Record<RoomTypeId, number>> {
@@ -74,6 +116,29 @@ function countByRole(staff: Record<string, StaffMember>, role: StaffRole): numbe
   return count
 }
 
+function locationSatisfaction(location: HotelLocation, conciergeBonus: number): number {
+  const totalRooms = Object.keys(location.rooms).length
+  const base = computeSatisfaction(totalRooms, countByRole(location.staff, 'housekeeper'))
+  return Math.min(1, base + conciergeBonus)
+}
+
+function buildLocationSnapshots(state: GameState): EconomySnapshot[] {
+  const conciergeBonus = upgradeSatisfactionBonus(state.upgradeLevels.concierge)
+  return Object.values(state.locations).map((location) => ({
+    roomCounts: countByType(location.rooms),
+    satisfaction: locationSatisfaction(location, conciergeBonus),
+    receptionistCount: countByRole(location.staff, 'receptionist'),
+  }))
+}
+
+function globalIncomeMultiplier(state: GameState, event: ActiveEvent | null, now: number): number {
+  return (
+    upgradeIncomeMultiplier(state.upgradeLevels.marketing, state.upgradeLevels.staffTraining) *
+    prestigeIncomeMultiplier(state.prestigePoints) *
+    eventIncomeMultiplier(event, now)
+  )
+}
+
 /**
  * Factory rather than a bare module-level store: production uses the single
  * `useGameStore` instance below, but tests can call this directly to get a
@@ -81,17 +146,26 @@ function countByRole(staff: Record<string, StaffMember>, role: StaffRole): numbe
  * sharing — and polluting — one global singleton across test cases.
  */
 export function createGameStore(persistName = 'grand-stay-tycoon-save'): UseBoundStore<StoreApi<GameState>> {
+  const starterLocationId = 'loc-starter'
+
   return create<GameState>()(
     persist(
       immer((set, get) => {
         function checkAchievements() {
           const state = get()
+          const totalUpgradeLevels = Object.values(state.upgradeLevels).reduce((a, b) => a + b, 0)
+          const totalFloors = Object.values(state.locations).reduce((sum, l) => sum + l.floors.length, 0)
+          const totalStaff = Object.values(state.locations).reduce((sum, l) => sum + Object.keys(l.staff).length, 0)
+
           const newly = getNewlyUnlockedAchievements(
             {
-              totalRoomsBuilt: state.totalRoomCount(),
-              totalFloors: state.floors.length,
-              totalEarned: state.totalEarned,
-              staffCount: Object.keys(state.staff).length,
+              totalRoomsBuilt: state.totalRoomCountAllLocations(),
+              totalFloors,
+              lifetimeEarned: state.lifetimeEarned,
+              staffCount: totalStaff,
+              locationsUnlocked: Object.keys(state.locations).length,
+              prestigeCount: state.prestigeCount,
+              totalUpgradeLevels,
             },
             state.unlockedAchievementIds,
           )
@@ -108,10 +182,14 @@ export function createGameStore(persistName = 'grand-stay-tycoon-save'): UseBoun
         return {
           cash: 25,
           totalEarned: 0,
+          lifetimeEarned: 0,
           lastTickTimestamp: Date.now(),
-          floors: makeInitialFloors(),
-          rooms: {},
-          staff: {},
+          locations: { [starterLocationId]: makeStarterLocation(starterLocationId) },
+          activeLocationId: starterLocationId,
+          upgradeLevels: { marketing: 0, staffTraining: 0, concierge: 0 },
+          prestigePoints: 0,
+          prestigeCount: 0,
+          activeEvent: null,
           unlockedAchievementIds: [],
           muted: false,
           pendingOfflineEarnings: null,
@@ -127,27 +205,46 @@ export function createGameStore(persistName = 'grand-stay-tycoon-save'): UseBoun
               state.pendingAchievements.shift()
             }),
 
-          totalRoomCount: () => Object.keys(get().rooms).length,
+          activeLocation: () => {
+            const state = get()
+            return state.locations[state.activeLocationId]
+          },
 
-          roomCountsByType: () => countByType(get().rooms),
+          totalRoomCount: () => Object.keys(get().activeLocation().rooms).length,
 
-          staffCountByRole: (role) => countByRole(get().staff, role),
+          totalRoomCountAllLocations: () =>
+            Object.values(get().locations).reduce((sum, l) => sum + Object.keys(l.rooms).length, 0),
 
-          satisfaction: () => computeSatisfaction(get().totalRoomCount(), get().staffCountByRole('housekeeper')),
+          roomCountsByType: () => countByType(get().activeLocation().rooms),
+
+          staffCountByRole: (role) => countByRole(get().activeLocation().staff, role),
+
+          satisfaction: () => {
+            const state = get()
+            const conciergeBonus = upgradeSatisfactionBonus(state.upgradeLevels.concierge)
+            return locationSatisfaction(state.activeLocation(), conciergeBonus)
+          },
 
           nextRoomCost: (typeId) => {
-            const countOfType = countByType(get().rooms)[typeId] ?? 0
+            const countOfType = countByType(get().activeLocation().rooms)[typeId] ?? 0
             return roomCost(typeId, countOfType)
           },
 
-          nextFloorCost: () => floorCost(get().floors.length),
+          nextFloorCost: () => floorCost(get().activeLocation().floors.length),
 
           nextStaffCost: (role) => staffCost(role, get().staffCountByRole(role)),
 
+          nextUpgradeCost: (id) => upgradeCost(id, get().upgradeLevels[id]),
+
+          isLocationUnlocked: (themeId) => Object.values(get().locations).some((l) => l.themeId === themeId),
+
+          prestigePreview: () => prestigePointsForTotalEarned(get().totalEarned),
+
           buyRoom: (typeId) => {
             const state = get()
-            if (!isRoomTypeUnlocked(typeId, state.totalRoomCount())) return false
-            const targetFloor = state.floors.find((f) => f.roomIds.length < f.slotCount)
+            const location = state.activeLocation()
+            if (!isRoomTypeUnlocked(typeId, Object.keys(location.rooms).length)) return false
+            const targetFloor = location.floors.find((f) => f.roomIds.length < f.slotCount)
             if (!targetFloor) return false
             const cost = state.nextRoomCost(typeId)
             if (state.cash < cost) return false
@@ -155,10 +252,11 @@ export function createGameStore(persistName = 'grand-stay-tycoon-save'): UseBoun
             const id = generateId('room')
             set((draft) => {
               draft.cash -= cost
-              const floor = draft.floors.find((f) => f.index === targetFloor.index)!
+              const loc = draft.locations[draft.activeLocationId]
+              const floor = loc.floors.find((f) => f.index === targetFloor.index)!
               const slotIndex = floor.roomIds.length
               floor.roomIds.push(id)
-              draft.rooms[id] = {
+              loc.rooms[id] = {
                 id,
                 floorIndex: floor.index,
                 slotIndex,
@@ -178,11 +276,8 @@ export function createGameStore(persistName = 'grand-stay-tycoon-save'): UseBoun
             if (state.cash < cost) return false
             set((draft) => {
               draft.cash -= cost
-              draft.floors.push({
-                index: draft.floors.length,
-                roomIds: [],
-                slotCount: ROOMS_PER_FLOOR,
-              })
+              const loc = draft.locations[draft.activeLocationId]
+              loc.floors.push({ index: loc.floors.length, roomIds: [], slotCount: ROOMS_PER_FLOOR })
             })
             playPurchaseSound()
             checkAchievements()
@@ -196,7 +291,7 @@ export function createGameStore(persistName = 'grand-stay-tycoon-save'): UseBoun
             const id = generateId('staff')
             set((draft) => {
               draft.cash -= cost
-              draft.staff[id] = { id, role, hiredAt: Date.now() }
+              draft.locations[draft.activeLocationId].staff[id] = { id, role, hiredAt: Date.now() }
             })
             playPurchaseSound()
             checkAchievements()
@@ -205,22 +300,93 @@ export function createGameStore(persistName = 'grand-stay-tycoon-save'): UseBoun
 
           setRoomStatus: (roomId, status) =>
             set((draft) => {
-              const room = draft.rooms[roomId]
+              const room = draft.locations[draft.activeLocationId].rooms[roomId]
               if (room) room.status = status
             }),
 
+          buyUpgrade: (id) => {
+            const state = get()
+            const currentLevel = state.upgradeLevels[id]
+            if (isUpgradeMaxed(id, currentLevel)) return false
+            const cost = upgradeCost(id, currentLevel)
+            if (state.cash < cost) return false
+            set((draft) => {
+              draft.cash -= cost
+              draft.upgradeLevels[id] += 1
+            })
+            playPurchaseSound()
+            checkAchievements()
+            return true
+          },
+
+          unlockLocation: (themeId) => {
+            const state = get()
+            if (state.isLocationUnlocked(themeId)) return false
+            const themeDef = getLocationThemeDef(themeId)
+            if (state.cash < themeDef.unlockCost) return false
+            const id = generateId('loc')
+            set((draft) => {
+              draft.cash -= themeDef.unlockCost
+              draft.locations[id] = {
+                id,
+                themeId,
+                floors: [{ index: 0, roomIds: [], slotCount: ROOMS_PER_FLOOR }],
+                rooms: {},
+                staff: {},
+              }
+              draft.activeLocationId = id
+            })
+            playPurchaseSound()
+            checkAchievements()
+            return true
+          },
+
+          switchLocation: (locationId) =>
+            set((draft) => {
+              if (draft.locations[locationId]) draft.activeLocationId = locationId
+            }),
+
+          prestige: () => {
+            const state = get()
+            const pointsEarned = prestigePointsForTotalEarned(state.totalEarned)
+            if (pointsEarned < 1) return false
+            const newStarterId = generateId('loc')
+            set((draft) => {
+              draft.prestigePoints += pointsEarned
+              draft.prestigeCount += 1
+              draft.cash = 25
+              draft.totalEarned = 0
+              draft.upgradeLevels = { marketing: 0, staffTraining: 0, concierge: 0 }
+              draft.activeEvent = null
+              draft.locations = { [newStarterId]: makeStarterLocation(newStarterId) }
+              draft.activeLocationId = newStarterId
+            })
+            playPrestigeSound()
+            checkAchievements()
+            return true
+          },
+
           tickEconomy: (deltaSeconds) => {
             const state = get()
-            const snapshot: EconomySnapshot = {
-              roomCounts: state.roomCountsByType(),
-              satisfaction: state.satisfaction(),
-              receptionistCount: state.staffCountByRole('receptionist'),
+            const now = Date.now()
+
+            let activeEvent = state.activeEvent
+            if (activeEvent && !isEventActive(activeEvent, now)) activeEvent = null
+            if (!activeEvent && Math.random() < EVENT_SPAWN_CHANCE_PER_SEC * deltaSeconds) {
+              const def = EVENTS[Math.floor(Math.random() * EVENTS.length)]
+              activeEvent = { id: def.id, endsAt: now + def.durationSeconds * 1000 }
             }
-            const { incomeEarned } = simulateEconomy(snapshot, deltaSeconds)
+
+            const snapshots = buildLocationSnapshots(state)
+            const multiplier = globalIncomeMultiplier(state, activeEvent, now)
+            const { incomeEarned } = simulateEconomyAcrossLocations(snapshots, multiplier, deltaSeconds)
+
             set((draft) => {
               draft.cash += incomeEarned
               draft.totalEarned += incomeEarned
-              draft.lastTickTimestamp = Date.now()
+              draft.lifetimeEarned += incomeEarned
+              draft.lastTickTimestamp = now
+              draft.activeEvent = activeEvent
             })
             checkAchievements()
           },
@@ -239,39 +405,70 @@ export function createGameStore(persistName = 'grand-stay-tycoon-save'): UseBoun
         partialize: (state) => ({
           cash: state.cash,
           totalEarned: state.totalEarned,
+          lifetimeEarned: state.lifetimeEarned,
           lastTickTimestamp: state.lastTickTimestamp,
-          floors: state.floors,
-          rooms: state.rooms,
-          staff: state.staff,
+          locations: state.locations,
+          activeLocationId: state.activeLocationId,
+          upgradeLevels: state.upgradeLevels,
+          prestigePoints: state.prestigePoints,
+          prestigeCount: state.prestigeCount,
+          activeEvent: state.activeEvent,
           unlockedAchievementIds: state.unlockedAchievementIds,
           muted: state.muted,
         }),
         onRehydrateStorage: () => (state) => {
           if (!state) return
 
-          const roomCounts = countByType(state.rooms)
-          const housekeeperCount = countByRole(state.staff, 'housekeeper')
-          const receptionistCount = countByRole(state.staff, 'receptionist')
-          const totalRooms = Object.keys(state.rooms).length
-          const satisfaction = computeSatisfaction(totalRooms, housekeeperCount)
+          const now = Date.now()
+          let activeEvent = state.activeEvent
+          if (activeEvent && !isEventActive(activeEvent, now)) activeEvent = null
+          state.activeEvent = activeEvent
+
+          const conciergeBonus = upgradeSatisfactionBonus(state.upgradeLevels.concierge)
+          const snapshots: EconomySnapshot[] = Object.values(state.locations).map((location) => ({
+            roomCounts: countByType(location.rooms),
+            satisfaction: locationSatisfaction(location, conciergeBonus),
+            receptionistCount: countByRole(location.staff, 'receptionist'),
+          }))
+          const multiplier =
+            upgradeIncomeMultiplier(state.upgradeLevels.marketing, state.upgradeLevels.staffTraining) *
+            prestigeIncomeMultiplier(state.prestigePoints) *
+            eventIncomeMultiplier(activeEvent, now)
 
           const { incomeEarned, elapsedSeconds } = computeOfflineEarnings(
-            { roomCounts, satisfaction, receptionistCount },
+            snapshots,
+            multiplier,
             state.lastTickTimestamp,
+            now,
           )
-          state.lastTickTimestamp = Date.now()
+          state.lastTickTimestamp = now
           if (incomeEarned > 0 && elapsedSeconds > 5) {
             state.cash += incomeEarned
             state.totalEarned += incomeEarned
+            state.lifetimeEarned += incomeEarned
             state.pendingOfflineEarnings = { incomeEarned, elapsedSeconds }
           }
 
+          const totalRoomsBuilt = Object.values(state.locations).reduce(
+            (sum, l) => sum + Object.keys(l.rooms).length,
+            0,
+          )
+          const totalFloors = Object.values(state.locations).reduce((sum, l) => sum + l.floors.length, 0)
+          const totalStaff = Object.values(state.locations).reduce(
+            (sum, l) => sum + Object.keys(l.staff).length,
+            0,
+          )
+          const totalUpgradeLevels = Object.values(state.upgradeLevels).reduce((a, b) => a + b, 0)
+
           const newlyUnlocked = getNewlyUnlockedAchievements(
             {
-              totalRoomsBuilt: totalRooms,
-              totalFloors: state.floors.length,
-              totalEarned: state.totalEarned,
-              staffCount: Object.keys(state.staff).length,
+              totalRoomsBuilt,
+              totalFloors,
+              lifetimeEarned: state.lifetimeEarned,
+              staffCount: totalStaff,
+              locationsUnlocked: Object.keys(state.locations).length,
+              prestigeCount: state.prestigeCount,
+              totalUpgradeLevels,
             },
             state.unlockedAchievementIds,
           )

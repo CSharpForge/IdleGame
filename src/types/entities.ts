@@ -25,6 +25,16 @@ export interface StaffMember {
   hiredAt: number
 }
 
+export type LocationThemeId = 'coastal' | 'mountain' | 'city' | 'desert'
+
+export interface HotelLocation {
+  id: string
+  themeId: LocationThemeId
+  floors: Floor[]
+  rooms: Record<string, Room>
+  staff: Record<string, StaffMember>
+}
+
 export type GuestPhase =
   | 'arriving'
   | 'walkToRoom'

@@ -22,6 +22,27 @@ const staffMemberSchema = z.object({
   hiredAt: z.number(),
 })
 
+const locationSchema = z.object({
+  id: z.string(),
+  themeId: z.enum(['coastal', 'mountain', 'city', 'desert']),
+  floors: z.array(floorSchema),
+  rooms: z.record(z.string(), roomSchema),
+  staff: z.record(z.string(), staffMemberSchema),
+})
+
+const upgradeLevelsSchema = z.object({
+  marketing: z.number(),
+  staffTraining: z.number(),
+  concierge: z.number(),
+})
+
+const activeEventSchema = z
+  .object({
+    id: z.enum(['weekend_rush', 'happy_hour']),
+    endsAt: z.number(),
+  })
+  .nullable()
+
 /**
  * The full, current-version shape. Used as a final sanity check AFTER
  * migration (see migrations.ts) — never at the raw storage-read layer,
@@ -30,10 +51,14 @@ const staffMemberSchema = z.object({
 export const persistedStateSchema = z.object({
   cash: z.number(),
   totalEarned: z.number(),
+  lifetimeEarned: z.number(),
   lastTickTimestamp: z.number(),
-  floors: z.array(floorSchema),
-  rooms: z.record(z.string(), roomSchema),
-  staff: z.record(z.string(), staffMemberSchema),
+  locations: z.record(z.string(), locationSchema),
+  activeLocationId: z.string(),
+  upgradeLevels: upgradeLevelsSchema,
+  prestigePoints: z.number(),
+  prestigeCount: z.number(),
+  activeEvent: activeEventSchema,
   unlockedAchievementIds: z.array(z.string()),
   muted: z.boolean().optional(),
 })
@@ -53,8 +78,6 @@ const rawSaveEnvelopeSchema = z.object({
       cash: z.number(),
       totalEarned: z.number(),
       lastTickTimestamp: z.number(),
-      floors: z.array(z.unknown()),
-      rooms: z.record(z.string(), z.unknown()),
     })
     .passthrough(),
   version: z.number(),

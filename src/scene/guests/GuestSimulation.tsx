@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { createReactAPI, useEntities } from 'miniplex-react'
 import { guestWorld, spawnGuest } from '../../game/ecs/world'
@@ -25,7 +25,7 @@ function GuestSpawnerAndReaper() {
     const stepSeconds = claimCheckAccumulator.current
     claimCheckAccumulator.current = 0
 
-    const { floors, rooms } = useGameStore.getState()
+    const { floors, rooms } = useGameStore.getState().activeLocation()
     const claimedRoomIds = new Set(
       [...guestWorld.entities]
         .filter((e) => e.phase !== 'done')
@@ -49,6 +49,16 @@ function GuestSpawnerAndReaper() {
 
 export function GuestSimulation() {
   const entities = useEntities(guestWorld)
+  const activeLocationId = useGameStore((s) => s.activeLocationId)
+
+  // Guests belong to whichever location's grid they were spawned against —
+  // clear them on switch rather than letting stale guests from the
+  // previous hotel wander through the newly-shown one.
+  useEffect(() => {
+    for (const entity of [...guestWorld.entities]) {
+      guestWorld.remove(entity)
+    }
+  }, [activeLocationId])
 
   return (
     <>

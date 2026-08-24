@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { playAchievementSound, playCashTickSound, playPopInSound, playPurchaseSound } from './soundManager'
+import { playAchievementSound, playCashTickSound, playPopInSound, playPrestigeSound, playPurchaseSound } from './soundManager'
 
 describe('soundManager', () => {
   // jsdom has no Web Audio API, which is also true of some real locked-down
@@ -9,5 +9,6 @@ describe('soundManager', () => {
     expect(() => playCashTickSound()).not.toThrow()
     expect(() => playPopInSound()).not.toThrow()
     expect(() => playAchievementSound()).not.toThrow()
+    expect(() => playPrestigeSound()).not.toThrow()
   })
 })

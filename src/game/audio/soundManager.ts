@@ -58,3 +58,8 @@ export function playPopInSound() {
 export function playAchievementSound() {
   playTone([523.25, 659.25, 783.99, 1046.5], 0.16, 'triangle', 0.08)
 }
+
+export function playPrestigeSound() {
+  // A "reset and rebirth" sweep: down then back up, wider than the other SFX.
+  playTone([880, 440, 220, 440, 880, 1320], 0.14, 'sawtooth', 0.06)
+}

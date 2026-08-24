@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { simulateEconomy } from './economyTick'
+import { simulateEconomy, simulateEconomyAcrossLocations } from './economyTick'
 
 const baseSnapshot = { roomCounts: { standard: 7 }, satisfaction: 1, receptionistCount: 0 }
 
@@ -71,5 +71,37 @@ describe('simulateEconomy', () => {
         }
       }
     }
+  })
+})
+
+describe('simulateEconomyAcrossLocations', () => {
+  it('sums income across multiple locations', () => {
+    const locA = { roomCounts: { standard: 5 }, satisfaction: 1, receptionistCount: 0 }
+    const locB = { roomCounts: { deluxe: 3 }, satisfaction: 1, receptionistCount: 0 }
+    const combined = simulateEconomyAcrossLocations([locA, locB], 1, 5).incomeEarned
+    const expected = simulateEconomy(locA, 5).incomeEarned + simulateEconomy(locB, 5).incomeEarned
+    expect(combined).toBeCloseTo(expected, 10)
+  })
+
+  it('applies the global multiplier once, to the summed total', () => {
+    const locA = { roomCounts: { standard: 5 }, satisfaction: 1, receptionistCount: 0 }
+    const withoutMultiplier = simulateEconomyAcrossLocations([locA], 1, 5).incomeEarned
+    const withMultiplier = simulateEconomyAcrossLocations([locA], 2, 5).incomeEarned
+    expect(withMultiplier).toBeCloseTo(withoutMultiplier * 2, 10)
+  })
+
+  it('is zero with no locations', () => {
+    expect(simulateEconomyAcrossLocations([], 3, 10).incomeEarned).toBe(0)
+  })
+
+  it('stays linear in delta across multiple locations', () => {
+    const locA = { roomCounts: { standard: 4 }, satisfaction: 0.8, receptionistCount: 1 }
+    const locB = { roomCounts: { suite: 2 }, satisfaction: 1, receptionistCount: 0 }
+    const bigTick = simulateEconomyAcrossLocations([locA, locB], 1.3, 10).incomeEarned
+    let summed = 0
+    for (let i = 0; i < 100; i++) {
+      summed += simulateEconomyAcrossLocations([locA, locB], 1.3, 0.1).incomeEarned
+    }
+    expect(summed).toBeCloseTo(bigTick, 8)
   })
 })

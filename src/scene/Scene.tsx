@@ -1,18 +1,24 @@
 import { OrbitControls } from '@react-three/drei'
 import { EffectComposer, Outline, Selection } from '@react-three/postprocessing'
+import { useGameStore } from '../game/state/store'
+import { getLocationThemeDef } from '../game/data/locationThemes'
 import { Building } from './hotel/Building'
 import { GuestSimulation } from './guests/GuestSimulation'
 
 export function Scene() {
+  const themeId = useGameStore((s) => s.activeLocation().themeId)
+  const theme = getLocationThemeDef(themeId)
+
   return (
     <>
       {/* Explicit sky color — without this the canvas is transparent and
           shows whatever the page background happens to be, which flips to
-          black on a dark-mode OS/browser (see index.css color-scheme). */}
-      <color attach="background" args={['#bcd7ff']} />
+          black on a dark-mode OS/browser (see index.css color-scheme). Tied
+          to the active location's theme so each hotel has its own mood. */}
+      <color attach="background" args={[theme.skyColor]} />
       <ambientLight intensity={0.7} />
       <directionalLight position={[6, 10, 4]} intensity={1.3} castShadow shadow-mapSize={[1024, 1024]} />
-      <hemisphereLight args={['#bcd7ff', '#7fb069', 0.4]} />
+      <hemisphereLight args={[theme.ambientSkyColor, theme.groundColor, 0.4]} />
 
       {/* Only Room and GuestAgent wrap their meshes in <Select enabled> (see
           those components) — ghost slots and floor slabs are deliberately
