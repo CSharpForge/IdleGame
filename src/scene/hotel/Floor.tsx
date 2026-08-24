@@ -25,7 +25,8 @@ function GhostSlot({ floorIndex, slotIndex }: { floorIndex: number; slotIndex: n
 }
 
 export function Floor({ floor, rooms }: { floor: FloorData; rooms: Record<string, RoomData> }) {
-  const [slabW, slabD] = floorSlabSize()
+  const [slabW, slabD] = floorSlabSize(floor.slotCount)
+  const [slabX, slabY, slabZ] = floorSlabPosition(floor.index, floor.slotCount)
   const emptySlotIndices = Array.from(
     { length: floor.slotCount - floor.roomIds.length },
     (_, i) => floor.roomIds.length + i,
@@ -33,11 +34,11 @@ export function Floor({ floor, rooms }: { floor: FloorData; rooms: Record<string
 
   return (
     <group>
-      <mesh position={floorSlabPosition(floor.index)} receiveShadow>
+      <mesh position={[slabX, slabY, slabZ]} receiveShadow>
         <boxGeometry args={[slabW, 0.2, slabD]} />
         <meshStandardMaterial color="#d9c9a3" />
       </mesh>
-      <mesh position={[0, floorBaseY(floor.index) + 0.35, 1.15]} receiveShadow castShadow>
+      <mesh position={[slabX, floorBaseY(floor.index) + 0.35, 1.15]} receiveShadow castShadow>
         <boxGeometry args={[slabW, 0.7, 0.08]} />
         <meshStandardMaterial color="#c2b28f" />
       </mesh>

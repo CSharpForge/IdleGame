@@ -1,6 +1,7 @@
 import { useGameStore } from '../../game/state/store'
 import { getLocationThemeDef } from '../../game/data/locationThemes'
-import { ELEVATOR_X, FLOOR_HEIGHT, floorSlabSize } from './layout'
+import { ROOMS_PER_FLOOR } from '../../game/data/roomTypes'
+import { ELEVATOR_X, FLOOR_HEIGHT, floorSlabPosition, floorSlabSize } from './layout'
 import { Floor } from './Floor'
 
 function ElevatorCore({ floorCount }: { floorCount: number }) {
@@ -21,13 +22,19 @@ function ElevatorCore({ floorCount }: { floorCount: number }) {
 
 export function Building() {
   const location = useGameStore((s) => s.activeLocation())
-  const [slabW] = floorSlabSize()
   const theme = getLocationThemeDef(location.themeId)
+
+  // The ground plane must cover the widest floor (a floor widened by a
+  // "wing" purchase extends only to the right — see layout.ts) so it never
+  // shows a gap under an expanded floor's extra rooms.
+  const maxSlotCount = Math.max(ROOMS_PER_FLOOR, ...location.floors.map((f) => f.slotCount))
+  const [widestSlabW] = floorSlabSize(maxSlotCount)
+  const [widestSlabX] = floorSlabPosition(0, maxSlotCount)
 
   return (
     <group>
-      <mesh position={[0, -0.15, -0.5]} receiveShadow>
-        <boxGeometry args={[slabW + 4, 0.1, 12]} />
+      <mesh position={[widestSlabX, -0.15, -0.5]} receiveShadow>
+        <boxGeometry args={[widestSlabW + 4, 0.1, 12]} />
         <meshStandardMaterial color={theme.groundColor} />
       </mesh>
       <ElevatorCore floorCount={location.floors.length} />

@@ -10,7 +10,16 @@ import type {
   StaffMember,
   StaffRole,
 } from '../../types/entities'
-import { floorCost, isRoomTypeUnlocked, roomCost, ROOMS_PER_FLOOR } from '../data/roomTypes'
+import {
+  floorCost,
+  isFloorMaxWidth,
+  isRoomTypeUnlocked,
+  roomCost,
+  ROOMS_PER_FLOOR,
+  wingExpansionCost,
+  timesFloorExpanded,
+  WING_EXPANSION_SIZE,
+} from '../data/roomTypes'
 import { staffCost } from '../data/staffDefs'
 import { isUpgradeMaxed, upgradeCost, type UpgradeId } from '../data/upgradeDefs'
 import { getLocationThemeDef, LOCATION_THEMES } from '../data/locationThemes'
@@ -77,9 +86,13 @@ export interface GameState {
   nextUpgradeCost: (id: UpgradeId) => number
   isLocationUnlocked: (themeId: LocationThemeId) => boolean
   prestigePreview: () => number
+  /** The lowest-index floor in the active location that's full and can still be widened, or null if none. */
+  nextExpandableFloorIndex: () => number | null
+  nextWingExpansionCost: (floorIndex: number) => number
 
   buyRoom: (typeId: RoomTypeId) => boolean
   buyFloor: () => boolean
+  expandFloor: (floorIndex: number) => boolean
   hireStaff: (role: StaffRole) => boolean
   setRoomStatus: (roomId: string, status: RoomStatus) => void
   buyUpgrade: (id: UpgradeId) => boolean
@@ -240,6 +253,20 @@ export function createGameStore(persistName = 'grand-stay-tycoon-save'): UseBoun
 
           prestigePreview: () => prestigePointsForTotalEarned(get().totalEarned),
 
+          nextExpandableFloorIndex: () => {
+            const location = get().activeLocation()
+            const candidate = location.floors.find(
+              (f) => f.roomIds.length >= f.slotCount && !isFloorMaxWidth(f.slotCount),
+            )
+            return candidate ? candidate.index : null
+          },
+
+          nextWingExpansionCost: (floorIndex) => {
+            const floor = get().activeLocation().floors.find((f) => f.index === floorIndex)
+            if (!floor) return Infinity
+            return wingExpansionCost(timesFloorExpanded(floor.slotCount))
+          },
+
           buyRoom: (typeId) => {
             const state = get()
             const location = state.activeLocation()
@@ -278,6 +305,22 @@ export function createGameStore(persistName = 'grand-stay-tycoon-save'): UseBoun
               draft.cash -= cost
               const loc = draft.locations[draft.activeLocationId]
               loc.floors.push({ index: loc.floors.length, roomIds: [], slotCount: ROOMS_PER_FLOOR })
+            })
+            playPurchaseSound()
+            checkAchievements()
+            return true
+          },
+
+          expandFloor: (floorIndex) => {
+            const state = get()
+            const floor = state.activeLocation().floors.find((f) => f.index === floorIndex)
+            if (!floor || isFloorMaxWidth(floor.slotCount)) return false
+            const cost = state.nextWingExpansionCost(floorIndex)
+            if (state.cash < cost) return false
+            set((draft) => {
+              draft.cash -= cost
+              const targetFloor = draft.locations[draft.activeLocationId].floors.find((f) => f.index === floorIndex)!
+              targetFloor.slotCount += WING_EXPANSION_SIZE
             })
             playPurchaseSound()
             checkAchievements()

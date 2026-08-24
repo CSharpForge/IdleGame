@@ -62,12 +62,17 @@ function RoomCards() {
   const location = useGameStore((s) => s.activeLocation())
   const buyRoom = useGameStore((s) => s.buyRoom)
   const buyFloor = useGameStore((s) => s.buyFloor)
+  const expandFloor = useGameStore((s) => s.expandFloor)
   const nextRoomCost = useGameStore((s) => s.nextRoomCost)
   const nextFloorCost = useGameStore((s) => s.nextFloorCost())
+  const expandableFloorIndex = useGameStore((s) => s.nextExpandableFloorIndex())
+  const nextWingExpansionCost = useGameStore((s) => s.nextWingExpansionCost)
 
   const totalRooms = Object.keys(location.rooms).length
   const floorHasSpace = location.floors.some((f) => f.roomIds.length < f.slotCount)
   const canBuyFloor = cash >= nextFloorCost
+  const wingCost = expandableFloorIndex !== null ? nextWingExpansionCost(expandableFloorIndex) : null
+  const canExpandWing = wingCost !== null && cash >= wingCost
 
   return (
     <div style={cardRowStyle}>
@@ -101,6 +106,16 @@ function RoomCards() {
         <span style={{ fontWeight: 700 }}>🏗️ Add Floor</span>
         <span style={{ fontSize: '12px' }}>${formatNumber(nextFloorCost)}</span>
       </button>
+      {expandableFloorIndex !== null && (
+        <button
+          style={{ ...cardStyle, background: canExpandWing ? '#588157' : '#8a8a8a' }}
+          disabled={!canExpandWing}
+          onClick={() => expandFloor(expandableFloorIndex)}
+        >
+          <span style={{ fontWeight: 700 }}>↔️ Expand Wing</span>
+          <span style={{ fontSize: '12px' }}>Floor {expandableFloorIndex + 1} · ${formatNumber(wingCost!)}</span>
+        </button>
+      )}
     </div>
   )
 }

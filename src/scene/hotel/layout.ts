@@ -39,15 +39,30 @@ export function lobbyPosition(): Vec3 {
 
 const SLAB_FRONT_MARGIN = 0.9
 const SLAB_BACK_MARGIN = 0.3
+const SLAB_SIDE_MARGIN = 0.5
 
-export function floorSlabPosition(floorIndex: number): Vec3 {
-  const backEdge = ROOM_Z - ROOM_DEPTH / 2 - SLAB_BACK_MARGIN
-  const frontEdge = CORRIDOR_Z + SLAB_FRONT_MARGIN
-  return [0, floorBaseY(floorIndex) - 0.1, (backEdge + frontEdge) / 2]
+// slotX() is purely a function of slotIndex (not total slot count), so a
+// floor's slot 0..3 never move when it gains "wing" slots 4, 5, ... beyond
+// the original SLOTS_PER_FLOOR — new slots just extend further along +X.
+// The slab therefore has a FIXED left edge (slot 0's edge) and a right edge
+// that grows with slotCount, rather than staying centered at x=0.
+function slabLeftEdge(): number {
+  return slotX(0) - ROOM_WIDTH / 2 - SLAB_SIDE_MARGIN
 }
 
-export function floorSlabSize(): [number, number] {
+function slabRightEdge(slotCount: number): number {
+  return slotX(slotCount - 1) + ROOM_WIDTH / 2 + SLAB_SIDE_MARGIN
+}
+
+export function floorSlabPosition(floorIndex: number, slotCount: number = SLOTS_PER_FLOOR): Vec3 {
   const backEdge = ROOM_Z - ROOM_DEPTH / 2 - SLAB_BACK_MARGIN
   const frontEdge = CORRIDOR_Z + SLAB_FRONT_MARGIN
-  return [SLOTS_PER_FLOOR * ROOM_WIDTH + 1, frontEdge - backEdge]
+  const centerX = (slabLeftEdge() + slabRightEdge(slotCount)) / 2
+  return [centerX, floorBaseY(floorIndex) - 0.1, (backEdge + frontEdge) / 2]
+}
+
+export function floorSlabSize(slotCount: number = SLOTS_PER_FLOOR): [number, number] {
+  const backEdge = ROOM_Z - ROOM_DEPTH / 2 - SLAB_BACK_MARGIN
+  const frontEdge = CORRIDOR_Z + SLAB_FRONT_MARGIN
+  return [slabRightEdge(slotCount) - slabLeftEdge(), frontEdge - backEdge]
 }

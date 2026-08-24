@@ -107,6 +107,57 @@ describe('buyFloor', () => {
   })
 })
 
+describe('expandFloor (wings)', () => {
+  it('reports no expandable floor until the floor is actually full', () => {
+    store.setState({ cash: 1_000_000 })
+    store.getState().buyRoom('standard')
+    expect(store.getState().nextExpandableFloorIndex()).toBeNull()
+  })
+
+  it('reports the floor as expandable once it is full', () => {
+    store.setState({ cash: 1_000_000 })
+    for (let i = 0; i < 4; i++) store.getState().buyRoom('standard')
+    expect(store.getState().nextExpandableFloorIndex()).toBe(0)
+  })
+
+  it('expanding a full floor increases its slotCount and deducts cash, letting more rooms be built there', () => {
+    store.setState({ cash: 1_000_000 })
+    for (let i = 0; i < 4; i++) store.getState().buyRoom('standard')
+    const slotsBefore = store.getState().activeLocation().floors[0].slotCount
+
+    const expanded = store.getState().expandFloor(0)
+
+    expect(expanded).toBe(true)
+    expect(store.getState().activeLocation().floors[0].slotCount).toBeGreaterThan(slotsBefore)
+    expect(store.getState().buyRoom('standard')).toBe(true)
+    expect(store.getState().activeLocation().floors[0].roomIds).toHaveLength(5)
+  })
+
+  it('fails when cash is insufficient', () => {
+    store.setState({ cash: 0 })
+    for (const f of store.getState().activeLocation().floors) {
+      expect(store.getState().expandFloor(f.index)).toBe(false)
+    }
+  })
+
+  it('fails once a floor has been expanded to its cap', () => {
+    store.setState({ cash: 1e9 })
+    for (let i = 0; i < 4; i++) store.getState().buyRoom('standard')
+    // Expand repeatedly, filling with rooms each time so it stays "full".
+    let guard = 0
+    while (store.getState().nextExpandableFloorIndex() !== null && guard < 10) {
+      const idx = store.getState().nextExpandableFloorIndex()!
+      store.getState().expandFloor(idx)
+      while (store.getState().buyRoom('standard')) {
+        /* fill the newly-opened slots */
+      }
+      guard++
+    }
+    expect(store.getState().nextExpandableFloorIndex()).toBeNull()
+    expect(store.getState().expandFloor(0)).toBe(false)
+  })
+})
+
 describe('hireStaff', () => {
   it('hires a staff member into the active location and deducts cash', () => {
     store.setState({ cash: 1_000_000 })

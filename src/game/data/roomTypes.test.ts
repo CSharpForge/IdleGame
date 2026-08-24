@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { floorCost, getRoomTypeDef, isRoomTypeUnlocked, ROOM_TYPES, roomCost } from './roomTypes'
+import {
+  floorCost,
+  getRoomTypeDef,
+  isFloorMaxWidth,
+  isRoomTypeUnlocked,
+  MAX_WING_EXPANSIONS_PER_FLOOR,
+  ROOM_TYPES,
+  ROOMS_PER_FLOOR,
+  roomCost,
+  timesFloorExpanded,
+  WING_EXPANSION_SIZE,
+  wingExpansionCost,
+} from './roomTypes'
 
 describe('roomCost', () => {
   for (const def of ROOM_TYPES) {
@@ -69,6 +81,33 @@ describe('floorCost', () => {
       expect(cost).toBeGreaterThan(0)
       expect(Number.isInteger(cost)).toBe(true)
       expect(Number.isFinite(cost)).toBe(true)
+    }
+  })
+})
+
+describe('wing expansion (horizontal growth)', () => {
+  it('timesFloorExpanded is 0 for a freshly-built floor', () => {
+    expect(timesFloorExpanded(ROOMS_PER_FLOOR)).toBe(0)
+  })
+
+  it('timesFloorExpanded increases by 1 per WING_EXPANSION_SIZE added', () => {
+    expect(timesFloorExpanded(ROOMS_PER_FLOOR + WING_EXPANSION_SIZE)).toBe(1)
+    expect(timesFloorExpanded(ROOMS_PER_FLOOR + WING_EXPANSION_SIZE * 2)).toBe(2)
+  })
+
+  it('isFloorMaxWidth is false below the cap and true at/above it', () => {
+    const capSlotCount = ROOMS_PER_FLOOR + WING_EXPANSION_SIZE * MAX_WING_EXPANSIONS_PER_FLOOR
+    expect(isFloorMaxWidth(capSlotCount - WING_EXPANSION_SIZE)).toBe(false)
+    expect(isFloorMaxWidth(capSlotCount)).toBe(true)
+  })
+
+  it('wingExpansionCost is monotonically increasing and always a positive integer', () => {
+    let previous = -Infinity
+    for (let n = 0; n < MAX_WING_EXPANSIONS_PER_FLOOR + 2; n++) {
+      const cost = wingExpansionCost(n)
+      expect(cost).toBeGreaterThan(previous)
+      expect(Number.isInteger(cost)).toBe(true)
+      previous = cost
     }
   })
 })

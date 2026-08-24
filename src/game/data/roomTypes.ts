@@ -74,3 +74,24 @@ export const GUEST_SPAWN_CHANCE_PER_SEC = 0.35
 export function floorCost(floorsUnlocked: number): number {
   return Math.round(FLOOR_BASE_COST * Math.pow(FLOOR_COST_GROWTH, floorsUnlocked))
 }
+
+// "Wings": a second, horizontal growth axis (M4) — an existing floor can be
+// widened past its starting ROOMS_PER_FLOOR slots instead of only growing
+// vertically via new floors. Capped per floor so a single floor can't grow
+// unboundedly and dominate the building's width.
+export const WING_EXPANSION_SIZE = 4
+export const MAX_WING_EXPANSIONS_PER_FLOOR = 2
+export const WING_BASE_COST = 400
+export const WING_COST_GROWTH = 2.2
+
+export function wingExpansionCost(timesAlreadyExpanded: number): number {
+  return Math.round(WING_BASE_COST * Math.pow(WING_COST_GROWTH, timesAlreadyExpanded))
+}
+
+export function timesFloorExpanded(slotCount: number): number {
+  return Math.round((slotCount - ROOMS_PER_FLOOR) / WING_EXPANSION_SIZE)
+}
+
+export function isFloorMaxWidth(slotCount: number): boolean {
+  return timesFloorExpanded(slotCount) >= MAX_WING_EXPANSIONS_PER_FLOOR
+}
