@@ -4,4 +4,8 @@
     <string name="title_activity_main">Grand Stay Tycoon</string>
     <string name="package_name">com.grandstay.tycoon</string>
     <string name="custom_url_scheme">com.grandstay.tycoon</string>
+    <!-- Placeholder until Play Console → Play Games Services → Configuration
+         supplies the real numeric Game services project ID (see the Google
+         Play Games plan). Sign-in will fail with this value in place. -->
+    <string name="game_services_project_id">000000000000</string>
 </resources>
