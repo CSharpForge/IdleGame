@@ -6,6 +6,10 @@ import { GuestSimulation } from './guests/GuestSimulation'
 export function Scene() {
   return (
     <>
+      {/* Explicit sky color — without this the canvas is transparent and
+          shows whatever the page background happens to be, which flips to
+          black on a dark-mode OS/browser (see index.css color-scheme). */}
+      <color attach="background" args={['#bcd7ff']} />
       <ambientLight intensity={0.7} />
       <directionalLight position={[6, 10, 4]} intensity={1.3} castShadow shadow-mapSize={[1024, 1024]} />
       <hemisphereLight args={['#bcd7ff', '#7fb069', 0.4]} />
