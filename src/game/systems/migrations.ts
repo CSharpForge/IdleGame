@@ -1,10 +1,11 @@
-import { persistedStateSchema } from './saveLoad'
+import { persistedStateSchema, type PersistedState } from './saveLoad'
 
 export const CURRENT_SAVE_VERSION = 4
 
 const STARTER_LOCATION_ID = 'loc-starter'
 
-function freshDefaultState() {
+/** A brand-new save's shape — also reused by cloud-save "Reset Save" to erase the cloud snapshot, not just localStorage. */
+export function freshDefaultState(): PersistedState {
   return {
     cash: 25,
     totalEarned: 0,

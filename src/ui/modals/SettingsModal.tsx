@@ -1,6 +1,11 @@
+import { Capacitor } from '@capacitor/core'
 import { useState } from 'react'
+import { freshDefaultState } from '../../game/systems/migrations'
 import { DEFAULT_SAVE_KEY, useGameStore } from '../../game/state/store'
+import { saveCloudSnapshot, showAchievementsUI, showLeaderboardUI, signInSilently } from '../../platform/playGames/playGamesClient'
 import { resetCamera } from '../../scene/cameraControls'
+
+const isAndroidNative = Capacitor.getPlatform() === 'android'
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const muted = useGameStore((s) => s.muted)
@@ -71,6 +76,43 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           🎥 Reset Camera
         </button>
 
+        {isAndroidNative && (
+          <>
+            <button
+              onClick={() => void showAchievementsUI()}
+              style={{
+                width: '100%',
+                border: 'none',
+                background: '#3d5a80',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: '15px',
+                padding: '12px',
+                borderRadius: '12px',
+                marginBottom: '10px',
+              }}
+            >
+              🏆 Achievements
+            </button>
+            <button
+              onClick={() => void showLeaderboardUI()}
+              style={{
+                width: '100%',
+                border: 'none',
+                background: '#3d5a80',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: '15px',
+                padding: '12px',
+                borderRadius: '12px',
+                marginBottom: '10px',
+              }}
+            >
+              📊 Leaderboard
+            </button>
+          </>
+        )}
+
         {!confirmingReset ? (
           <button
             onClick={() => setConfirmingReset(true)}
@@ -96,8 +138,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 onClick={() => {
-                  localStorage.removeItem(DEFAULT_SAVE_KEY)
-                  window.location.reload()
+                  void (async () => {
+                    // Erase everywhere, not just locally: if signed in, overwrite
+                    // the cloud snapshot with a fresh save before reloading — the
+                    // next sync would otherwise silently pull the old progress
+                    // right back (a fresh local save has lifetimeEarned 0, which
+                    // always loses conflict resolution against real cloud progress).
+                    if (isAndroidNative && (await signInSilently())) {
+                      await saveCloudSnapshot(freshDefaultState())
+                    }
+                    localStorage.removeItem(DEFAULT_SAVE_KEY)
+                    window.location.reload()
+                  })()
                 }}
                 style={{
                   flex: 1,

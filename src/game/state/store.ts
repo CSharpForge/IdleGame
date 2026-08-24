@@ -1,15 +1,7 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
-import type {
-  HotelLocation,
-  LocationThemeId,
-  Room,
-  RoomStatus,
-  RoomTypeId,
-  StaffMember,
-  StaffRole,
-} from '../../types/entities'
+import type { HotelLocation, LocationThemeId, RoomStatus, RoomTypeId, StaffRole } from '../../types/entities'
 import {
   floorCost,
   isFloorMaxWidth,
@@ -30,18 +22,16 @@ import {
 } from '../data/prestigeUpgradeDefs'
 import { getLocationThemeDef, LOCATION_THEMES } from '../data/locationThemes'
 import { EVENTS, EVENT_SPAWN_CHANCE_PER_SEC } from '../data/eventDefs'
+import { getNewlyUnlockedAchievements, type AchievementDef } from '../data/achievementDefs'
+import { simulateEconomyAcrossLocations } from '../systems/economyTick'
 import {
-  getNewlyUnlockedAchievements,
-  type AchievementDef,
-  type AchievementSnapshot,
-} from '../data/achievementDefs'
-import { simulateEconomyAcrossLocations, type EconomySnapshot } from '../systems/economyTick'
-import { computeOfflineEarnings } from '../systems/offlineEarnings'
-import {
-  computeSatisfaction,
-  HIGH_SATISFACTION_THRESHOLD,
-  managerEffectivenessMultiplier,
-} from '../systems/satisfaction'
+  buildAchievementSnapshot,
+  buildLocationSnapshots,
+  countByRole,
+  countByType,
+  locationSatisfaction,
+} from '../systems/locationStats'
+import { HIGH_SATISFACTION_THRESHOLD } from '../systems/satisfaction'
 import { upgradeIncomeMultiplier, upgradeSatisfactionBonus } from '../systems/upgrades'
 import {
   prestigeHeadStartBonus,
@@ -58,9 +48,11 @@ import {
   isEventActive,
   type ActiveEvent,
 } from '../systems/events'
-import { createValidatedStorage } from '../systems/saveLoad'
+import { createValidatedStorage, type PersistedState } from '../systems/saveLoad'
 import { CURRENT_SAVE_VERSION, migrateSave } from '../systems/migrations'
+import { computeRehydratedState } from '../systems/rehydration'
 import { playAchievementSound, playPrestigeSound, playPurchaseSound } from '../audio/soundManager'
+import { reportAchievementUnlocks } from '../../platform/playGames/achievementReporting'
 
 function generateId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -151,102 +143,39 @@ function makeStarterLocation(id: string): HotelLocation {
   }
 }
 
-function countByType(rooms: Record<string, Room>): Partial<Record<RoomTypeId, number>> {
-  const counts: Partial<Record<RoomTypeId, number>> = {}
-  for (const room of Object.values(rooms)) {
-    counts[room.typeId] = (counts[room.typeId] ?? 0) + 1
-  }
-  return counts
-}
-
-function countByRole(staff: Record<string, StaffMember>, role: StaffRole): number {
-  let count = 0
-  for (const member of Object.values(staff)) {
-    if (member.role === role) count++
-  }
-  return count
-}
-
-function locationSatisfaction(
-  location: HotelLocation,
-  conciergeBonus: number,
-  staffSynergyBonus: number,
-  satisfactionFloorBonus: number,
-  eventBonus: number,
-): number {
-  const totalRooms = Object.keys(location.rooms).length
-  const managerBoost = managerEffectivenessMultiplier(countByRole(location.staff, 'manager'))
-  const effectiveHousekeepers = countByRole(location.staff, 'housekeeper') * managerBoost * staffSynergyBonus
-  const base = computeSatisfaction(totalRooms, effectiveHousekeepers)
-  return Math.min(1, base + conciergeBonus + satisfactionFloorBonus + eventBonus)
-}
-
-function buildLocationSnapshots(
-  state: GameState,
-  activeEvent: ActiveEvent | null,
-  now: number,
-): EconomySnapshot[] {
-  const conciergeBonus = upgradeSatisfactionBonus(state.upgradeLevels.concierge)
-  const staffSynergyBonus = prestigeStaffEffectivenessBonus(state.prestigeUpgradeLevels.staffSynergy)
-  const satisfactionFloorBonus = prestigeSatisfactionFloorBonus(state.prestigeUpgradeLevels.satisfactionFloor)
-  const eventBonus = eventSatisfactionBonus(activeEvent, now)
-  return Object.values(state.locations).map((location) => {
-    const managerBoost = managerEffectivenessMultiplier(countByRole(location.staff, 'manager'))
-    return {
-      roomCounts: countByType(location.rooms),
-      satisfaction: locationSatisfaction(
-        location,
-        conciergeBonus,
-        staffSynergyBonus,
-        satisfactionFloorBonus,
-        eventBonus,
-      ),
-      receptionistCount: countByRole(location.staff, 'receptionist') * managerBoost * staffSynergyBonus,
-    }
-  })
-}
-
-function buildAchievementSnapshot(state: GameState): AchievementSnapshot {
-  const totalUpgradeLevels = Object.values(state.upgradeLevels).reduce((a, b) => a + b, 0)
-  const staffCountByRole: Partial<Record<StaffRole, number>> = {}
-  let totalStaff = 0
-  let totalFloors = 0
-  let wingExpansionsTotal = 0
-  let totalRoomsBuilt = 0
-  for (const location of Object.values(state.locations)) {
-    totalRoomsBuilt += Object.keys(location.rooms).length
-    totalFloors += location.floors.length
-    for (const floor of location.floors) {
-      wingExpansionsTotal += timesFloorExpanded(floor.slotCount)
-    }
-    for (const member of Object.values(location.staff)) {
-      totalStaff += 1
-      staffCountByRole[member.role] = (staffCountByRole[member.role] ?? 0) + 1
-    }
-  }
-
-  return {
-    totalRoomsBuilt,
-    totalFloors,
-    lifetimeEarned: state.lifetimeEarned,
-    staffCount: totalStaff,
-    staffCountByRole,
-    locationsUnlocked: Object.keys(state.locations).length,
-    prestigeCount: state.prestigeCount,
-    totalUpgradeLevels,
-    wingExpansionsTotal,
-    eventsExperienced: state.eventsExperienced,
-    bestSatisfactionStreakSeconds: state.bestSatisfactionStreakSeconds,
-    totalPlaytimeSeconds: state.totalPlaytimeSeconds,
-  }
-}
-
 function globalIncomeMultiplier(state: GameState, event: ActiveEvent | null, now: number): number {
   return (
     upgradeIncomeMultiplier(state.upgradeLevels.marketing, state.upgradeLevels.staffTraining) *
     prestigeIncomeMultiplier(state.prestigePoints) *
     eventIncomeMultiplier(event, now)
   )
+}
+
+/**
+ * The save-relevant subset of GameState, matching PersistedState exactly —
+ * used both as the `persist` middleware's `partialize` and to build the
+ * blob pushed to Google Play Games cloud save, so the two can't drift apart.
+ */
+export function toPersistedState(state: GameState): PersistedState {
+  return {
+    cash: state.cash,
+    totalEarned: state.totalEarned,
+    lifetimeEarned: state.lifetimeEarned,
+    lastTickTimestamp: state.lastTickTimestamp,
+    locations: state.locations,
+    activeLocationId: state.activeLocationId,
+    upgradeLevels: state.upgradeLevels,
+    prestigePoints: state.prestigePoints,
+    prestigeCount: state.prestigeCount,
+    prestigeUpgradeLevels: state.prestigeUpgradeLevels,
+    activeEvent: state.activeEvent,
+    eventsExperienced: state.eventsExperienced,
+    currentSatisfactionStreakSeconds: state.currentSatisfactionStreakSeconds,
+    bestSatisfactionStreakSeconds: state.bestSatisfactionStreakSeconds,
+    totalPlaytimeSeconds: state.totalPlaytimeSeconds,
+    unlockedAchievementIds: state.unlockedAchievementIds,
+    muted: state.muted,
+  }
 }
 
 /**
@@ -274,6 +203,7 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
             }
           })
           playAchievementSound()
+          reportAchievementUnlocks(newly)
         }
 
         return {
@@ -614,60 +544,23 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
         version: CURRENT_SAVE_VERSION,
         migrate: migrateSave,
         storage: createValidatedStorage(),
-        partialize: (state) => ({
-          cash: state.cash,
-          totalEarned: state.totalEarned,
-          lifetimeEarned: state.lifetimeEarned,
-          lastTickTimestamp: state.lastTickTimestamp,
-          locations: state.locations,
-          activeLocationId: state.activeLocationId,
-          upgradeLevels: state.upgradeLevels,
-          prestigePoints: state.prestigePoints,
-          prestigeCount: state.prestigeCount,
-          prestigeUpgradeLevels: state.prestigeUpgradeLevels,
-          activeEvent: state.activeEvent,
-          eventsExperienced: state.eventsExperienced,
-          currentSatisfactionStreakSeconds: state.currentSatisfactionStreakSeconds,
-          bestSatisfactionStreakSeconds: state.bestSatisfactionStreakSeconds,
-          totalPlaytimeSeconds: state.totalPlaytimeSeconds,
-          unlockedAchievementIds: state.unlockedAchievementIds,
-          muted: state.muted,
-        }),
+        partialize: toPersistedState,
         onRehydrateStorage: () => (state) => {
           if (!state) return
 
-          const now = Date.now()
-          let activeEvent = state.activeEvent
-          if (activeEvent && !isEventActive(activeEvent, now)) activeEvent = null
-          state.activeEvent = activeEvent
-
-          const snapshots: EconomySnapshot[] = buildLocationSnapshots(state, activeEvent, now)
-          const multiplier =
-            upgradeIncomeMultiplier(state.upgradeLevels.marketing, state.upgradeLevels.staffTraining) *
-            prestigeIncomeMultiplier(state.prestigePoints) *
-            eventIncomeMultiplier(activeEvent, now)
-
-          const { incomeEarned, elapsedSeconds } = computeOfflineEarnings(
-            snapshots,
-            multiplier,
-            state.lastTickTimestamp,
-            now,
-          )
-          state.lastTickTimestamp = now
-          if (incomeEarned > 0 && elapsedSeconds > 5) {
-            state.cash += incomeEarned
-            state.totalEarned += incomeEarned
-            state.lifetimeEarned += incomeEarned
-            state.pendingOfflineEarnings = { incomeEarned, elapsedSeconds }
+          const result = computeRehydratedState(toPersistedState(state), Date.now())
+          state.activeEvent = result.activeEvent
+          state.lastTickTimestamp = result.lastTickTimestamp
+          state.cash = result.cash
+          state.totalEarned = result.totalEarned
+          state.lifetimeEarned = result.lifetimeEarned
+          if (result.pendingOfflineEarnings) {
+            state.pendingOfflineEarnings = result.pendingOfflineEarnings
           }
-
-          const newlyUnlocked = getNewlyUnlockedAchievements(
-            buildAchievementSnapshot(state),
-            state.unlockedAchievementIds,
-          )
-          if (newlyUnlocked.length > 0) {
-            state.unlockedAchievementIds = [...state.unlockedAchievementIds, ...newlyUnlocked.map((a) => a.id)]
-            state.pendingAchievements = [...state.pendingAchievements, ...newlyUnlocked]
+          if (result.newlyUnlockedAchievements.length > 0) {
+            state.unlockedAchievementIds = result.unlockedAchievementIds
+            state.pendingAchievements = [...state.pendingAchievements, ...result.newlyUnlockedAchievements]
+            reportAchievementUnlocks(result.newlyUnlockedAchievements)
           }
         },
       },

@@ -2,9 +2,11 @@ import { Canvas } from '@react-three/fiber'
 import { Scene } from '../scene/Scene'
 import { UIOverlay } from '../ui/UIOverlay'
 import { useEconomyLoop } from '../game/systems/useEconomyLoop'
+import { usePlayGamesSync } from '../platform/playGames/sync'
 
 export function App() {
   useEconomyLoop()
+  usePlayGamesSync()
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
