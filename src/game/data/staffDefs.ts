@@ -23,6 +23,13 @@ export const STAFF_ROLES: StaffRoleDef[] = [
     costGrowth: 1.4,
     description: 'Keeps guests happier, raising income further.',
   },
+  {
+    id: 'manager',
+    label: 'Manager',
+    baseCost: 500,
+    costGrowth: 1.6,
+    description: 'Boosts the effectiveness of your receptionists and housekeepers.',
+  },
 ]
 
 export function getStaffRoleDef(id: StaffRole): StaffRoleDef {
@@ -43,3 +50,10 @@ export const MAX_EFFECTIVE_RECEPTIONISTS = 10
 export const RECEPTIONIST_INCOME_BONUS_PER_UNIT = 0.05
 
 export const ROOMS_COVERED_PER_HOUSEKEEPER = 3
+
+// Managers don't earn income or satisfaction directly — they multiply the
+// effectiveness of the other two roles instead (see
+// satisfaction.ts's managerEffectivenessMultiplier), so they need their own
+// diminishing-returns cap for the same reason receptionists do.
+export const MAX_EFFECTIVE_MANAGERS = 5
+export const MANAGER_EFFECTIVENESS_BONUS_PER_UNIT = 0.08

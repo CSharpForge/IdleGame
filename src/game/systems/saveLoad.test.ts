@@ -150,4 +150,17 @@ describe('persistedStateSchema (strict, post-migration check)', () => {
     const value = validPersistedValue()
     expect(persistedStateSchema.safeParse(value.state).success).toBe(true)
   })
+
+  it('accepts a penthouse room and a manager staff member', () => {
+    const value = validPersistedValue()
+    value.state.locations['loc-1'].rooms['room-1'].typeId = 'penthouse'
+    value.state.locations['loc-1'].staff = { s1: { id: 's1', role: 'manager', hiredAt: 1 } }
+    expect(persistedStateSchema.safeParse(value.state).success).toBe(true)
+  })
+
+  it('still accepts an older save with only the original room/staff enum values', () => {
+    // Regression guard: widening the typeId/role enums for penthouse/manager
+    // must not require existing saves to have them.
+    expect(persistedStateSchema.safeParse(validPersistedValue().state).success).toBe(true)
+  })
 })

@@ -1,4 +1,6 @@
 import {
+  MANAGER_EFFECTIVENESS_BONUS_PER_UNIT,
+  MAX_EFFECTIVE_MANAGERS,
   MAX_EFFECTIVE_RECEPTIONISTS,
   RECEPTIONIST_INCOME_BONUS_PER_UNIT,
   ROOMS_COVERED_PER_HOUSEKEEPER,
@@ -28,4 +30,17 @@ export function incomeMultiplierFromSatisfaction(satisfaction: number): number {
 export function receptionistIncomeMultiplier(receptionistCount: number): number {
   const effectiveCount = Math.min(receptionistCount, MAX_EFFECTIVE_RECEPTIONISTS)
   return 1 + effectiveCount * RECEPTIONIST_INCOME_BONUS_PER_UNIT
+}
+
+/**
+ * Managers don't touch income or satisfaction directly — they scale up how
+ * many receptionists/housekeepers a location "effectively" has (see
+ * store.ts's buildLocationSnapshots/locationSatisfaction). This keeps the
+ * economy tick itself (economyTick.ts) fully agnostic of the manager role:
+ * it only ever sees an already-scaled receptionistCount/housekeeperCount,
+ * which preserves the closed-form linearity guarantee for free.
+ */
+export function managerEffectivenessMultiplier(managerCount: number): number {
+  const effectiveCount = Math.min(managerCount, MAX_EFFECTIVE_MANAGERS)
+  return 1 + effectiveCount * MANAGER_EFFECTIVENESS_BONUS_PER_UNIT
 }

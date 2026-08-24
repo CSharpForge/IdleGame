@@ -46,6 +46,17 @@ export const ROOM_TYPES: RoomTypeDef[] = [
     heightScale: 1.3,
     unlockAtRoomCount: 12,
   },
+  {
+    id: 'penthouse',
+    label: 'Penthouse',
+    baseCost: 1500,
+    costGrowth: 1.21,
+    incomePerSec: 18,
+    color: '#e63946',
+    windowColor: '#ffd166',
+    heightScale: 1.45,
+    unlockAtRoomCount: 28,
+  },
 ]
 
 export function getRoomTypeDef(id: RoomTypeId): RoomTypeDef {

@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   computeSatisfaction,
   incomeMultiplierFromSatisfaction,
+  managerEffectivenessMultiplier,
   receptionistIncomeMultiplier,
 } from './satisfaction'
-import { MAX_EFFECTIVE_RECEPTIONISTS, ROOMS_COVERED_PER_HOUSEKEEPER } from '../data/staffDefs'
+import {
+  MAX_EFFECTIVE_MANAGERS,
+  MAX_EFFECTIVE_RECEPTIONISTS,
+  ROOMS_COVERED_PER_HOUSEKEEPER,
+} from '../data/staffDefs'
 
 describe('computeSatisfaction', () => {
   it('is perfect with no rooms built yet', () => {
@@ -64,6 +69,27 @@ describe('receptionistIncomeMultiplier', () => {
   it('stops increasing past the diminishing-returns cap', () => {
     const atCap = receptionistIncomeMultiplier(MAX_EFFECTIVE_RECEPTIONISTS)
     const wayOverCap = receptionistIncomeMultiplier(MAX_EFFECTIVE_RECEPTIONISTS + 50)
+    expect(wayOverCap).toBe(atCap)
+  })
+})
+
+describe('managerEffectivenessMultiplier', () => {
+  it('is 1.0x (no-op) with no managers', () => {
+    expect(managerEffectivenessMultiplier(0)).toBe(1)
+  })
+
+  it('increases with each manager up to the cap', () => {
+    let previous = -Infinity
+    for (let n = 0; n <= MAX_EFFECTIVE_MANAGERS + 5; n++) {
+      const multiplier = managerEffectivenessMultiplier(n)
+      expect(multiplier).toBeGreaterThanOrEqual(previous)
+      previous = multiplier
+    }
+  })
+
+  it('stops increasing past the diminishing-returns cap', () => {
+    const atCap = managerEffectivenessMultiplier(MAX_EFFECTIVE_MANAGERS)
+    const wayOverCap = managerEffectivenessMultiplier(MAX_EFFECTIVE_MANAGERS + 50)
     expect(wayOverCap).toBe(atCap)
   })
 })

@@ -5,7 +5,7 @@ const roomSchema = z.object({
   id: z.string(),
   floorIndex: z.number(),
   slotIndex: z.number(),
-  typeId: z.enum(['standard', 'deluxe', 'suite']),
+  typeId: z.enum(['standard', 'deluxe', 'suite', 'penthouse']),
   status: z.enum(['vacant', 'occupied']),
   builtAt: z.number(),
 })
@@ -18,7 +18,7 @@ const floorSchema = z.object({
 
 const staffMemberSchema = z.object({
   id: z.string(),
-  role: z.enum(['receptionist', 'housekeeper']),
+  role: z.enum(['receptionist', 'housekeeper', 'manager']),
   hiredAt: z.number(),
 })
 

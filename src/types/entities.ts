@@ -1,6 +1,6 @@
 export type RoomStatus = 'vacant' | 'occupied'
 
-export type RoomTypeId = 'standard' | 'deluxe' | 'suite'
+export type RoomTypeId = 'standard' | 'deluxe' | 'suite' | 'penthouse'
 
 export interface Room {
   id: string
@@ -17,7 +17,7 @@ export interface Floor {
   slotCount: number
 }
 
-export type StaffRole = 'receptionist' | 'housekeeper'
+export type StaffRole = 'receptionist' | 'housekeeper' | 'manager'
 
 export interface StaffMember {
   id: string

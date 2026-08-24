@@ -27,7 +27,7 @@ import { EVENTS, EVENT_SPAWN_CHANCE_PER_SEC } from '../data/eventDefs'
 import { getNewlyUnlockedAchievements, type AchievementDef } from '../data/achievementDefs'
 import { simulateEconomyAcrossLocations, type EconomySnapshot } from '../systems/economyTick'
 import { computeOfflineEarnings } from '../systems/offlineEarnings'
-import { computeSatisfaction } from '../systems/satisfaction'
+import { computeSatisfaction, managerEffectivenessMultiplier } from '../systems/satisfaction'
 import { upgradeIncomeMultiplier, upgradeSatisfactionBonus } from '../systems/upgrades'
 import { prestigeIncomeMultiplier, prestigePointsForTotalEarned } from '../systems/prestige'
 import { eventIncomeMultiplier, isEventActive, type ActiveEvent } from '../systems/events'
@@ -131,17 +131,22 @@ function countByRole(staff: Record<string, StaffMember>, role: StaffRole): numbe
 
 function locationSatisfaction(location: HotelLocation, conciergeBonus: number): number {
   const totalRooms = Object.keys(location.rooms).length
-  const base = computeSatisfaction(totalRooms, countByRole(location.staff, 'housekeeper'))
+  const managerBoost = managerEffectivenessMultiplier(countByRole(location.staff, 'manager'))
+  const effectiveHousekeepers = countByRole(location.staff, 'housekeeper') * managerBoost
+  const base = computeSatisfaction(totalRooms, effectiveHousekeepers)
   return Math.min(1, base + conciergeBonus)
 }
 
 function buildLocationSnapshots(state: GameState): EconomySnapshot[] {
   const conciergeBonus = upgradeSatisfactionBonus(state.upgradeLevels.concierge)
-  return Object.values(state.locations).map((location) => ({
-    roomCounts: countByType(location.rooms),
-    satisfaction: locationSatisfaction(location, conciergeBonus),
-    receptionistCount: countByRole(location.staff, 'receptionist'),
-  }))
+  return Object.values(state.locations).map((location) => {
+    const managerBoost = managerEffectivenessMultiplier(countByRole(location.staff, 'manager'))
+    return {
+      roomCounts: countByType(location.rooms),
+      satisfaction: locationSatisfaction(location, conciergeBonus),
+      receptionistCount: countByRole(location.staff, 'receptionist') * managerBoost,
+    }
+  })
 }
 
 function globalIncomeMultiplier(state: GameState, event: ActiveEvent | null, now: number): number {
@@ -469,12 +474,7 @@ export function createGameStore(persistName: string = DEFAULT_SAVE_KEY): UseBoun
           if (activeEvent && !isEventActive(activeEvent, now)) activeEvent = null
           state.activeEvent = activeEvent
 
-          const conciergeBonus = upgradeSatisfactionBonus(state.upgradeLevels.concierge)
-          const snapshots: EconomySnapshot[] = Object.values(state.locations).map((location) => ({
-            roomCounts: countByType(location.rooms),
-            satisfaction: locationSatisfaction(location, conciergeBonus),
-            receptionistCount: countByRole(location.staff, 'receptionist'),
-          }))
+          const snapshots: EconomySnapshot[] = buildLocationSnapshots(state)
           const multiplier =
             upgradeIncomeMultiplier(state.upgradeLevels.marketing, state.upgradeLevels.staffTraining) *
             prestigeIncomeMultiplier(state.prestigePoints) *

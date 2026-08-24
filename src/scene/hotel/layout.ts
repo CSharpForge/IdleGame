@@ -1,7 +1,14 @@
 export const ROOM_WIDTH = 2.2
 export const ROOM_DEPTH = 2.2
 export const ROOM_HEIGHT = 1.7
-export const FLOOR_HEIGHT = 2.0
+// A room's world-space top edge is floorBaseY(floorIndex) + ROOM_HEIGHT *
+// heightScale (see Room.tsx), and the floor slab above sits at
+// floorBaseY(floorIndex) + FLOOR_HEIGHT - 0.2 (see floorSlabPosition below
+// and Floor.tsx's slab thickness/offset). At the old FLOOR_HEIGHT of 2.0,
+// only heightScale 1.0 (Standard) cleared that slab — Deluxe (1.15) and
+// Suite (1.3) already clipped through it. Raised to fit every tier up to
+// Penthouse (1.45) with a comfortable margin.
+export const FLOOR_HEIGHT = 2.8
 export const SLOTS_PER_FLOOR = 4
 export const CORRIDOR_Z = 0
 // Rooms recede AWAY from the camera (-Z) so the corridor/lobby side, where

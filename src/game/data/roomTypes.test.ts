@@ -41,8 +41,9 @@ describe('roomCost', () => {
   }
 
   it('throws for an unknown room type id', () => {
-    // @ts-expect-error deliberately invalid id for the test
-    expect(() => roomCost('penthouse', 0)).toThrow()
+    // @ts-expect-error deliberately invalid id for the test — 'penthouse' is
+    // a real tier now, so this uses a still-nonexistent id instead.
+    expect(() => roomCost('presidential', 0)).toThrow()
   })
 })
 

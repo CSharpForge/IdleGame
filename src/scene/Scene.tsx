@@ -39,11 +39,18 @@ export function Scene() {
         )}
       </Selection>
 
+      {/* minDistance/target were tuned on-device for the early-game view
+          (see CLAUDE.md's camera-framing note) and don't need to change:
+          floorBaseY(0) is always 0 regardless of FLOOR_HEIGHT, so a
+          starter (1-2 floor) hotel's geometry is identical either way.
+          maxDistance alone is raised so a many-floor building — whose
+          floors now sit further apart after M5's clipping fix — can still
+          be zoomed out far enough to fit fully in frame. */}
       <OrbitControls
         ref={orbitControlsRef}
         enablePan={false}
         minDistance={4}
-        maxDistance={24}
+        maxDistance={34}
         maxPolarAngle={Math.PI / 2.1}
         target={[-0.5, 1.8, -1]}
       />

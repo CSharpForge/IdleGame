@@ -65,6 +65,24 @@ describe('buyRoom', () => {
     expect(store.getState().buyRoom('deluxe')).toBe(true)
   })
 
+  it('unlocks penthouse once enough rooms are built in this location', () => {
+    store.setState({ cash: 1e9 })
+    expect(store.getState().buyRoom('penthouse')).toBe(false)
+    let built = 0
+    while (built < 28) {
+      if (store.getState().buyRoom('standard')) {
+        built++
+        continue
+      }
+      store.getState().buyFloor()
+    }
+    // Guarantee a free slot exists — the loop above may have just filled the
+    // last floor exactly full, which would fail buyRoom for lack of space
+    // rather than for being locked.
+    store.getState().buyFloor()
+    expect(store.getState().buyRoom('penthouse')).toBe(true)
+  })
+
   it('fills floors in order, moving to the next once one is full', () => {
     store.setState({ cash: 1_000_000 })
     for (let i = 0; i < 4; i++) {
@@ -179,6 +197,12 @@ describe('hireStaff', () => {
     const secondCost = store.getState().nextStaffCost('receptionist')
     expect(secondCost).toBeGreaterThan(firstCost)
   })
+
+  it('hires a manager into the active location', () => {
+    store.setState({ cash: 1_000_000 })
+    expect(store.getState().hireStaff('manager')).toBe(true)
+    expect(store.getState().staffCountByRole('manager')).toBe(1)
+  })
 })
 
 describe('satisfaction', () => {
@@ -207,6 +231,30 @@ describe('satisfaction', () => {
     const before = store.getState().satisfaction()
     store.getState().buyUpgrade('concierge')
     expect(store.getState().satisfaction()).toBeGreaterThan(before)
+  })
+
+  it('a manager amplifies an existing housekeeper\'s satisfaction boost', () => {
+    store.setState({ cash: 1_000_000 })
+    for (let i = 0; i < 8; i++) {
+      store.getState().buyRoom('standard')
+      if (i % 4 === 3) store.getState().buyFloor()
+    }
+    store.getState().hireStaff('housekeeper')
+    const withoutManager = store.getState().satisfaction()
+    store.getState().hireStaff('manager')
+    const withManager = store.getState().satisfaction()
+    expect(withManager).toBeGreaterThan(withoutManager)
+  })
+
+  it('a manager alone (no housekeeper) has no satisfaction effect', () => {
+    store.setState({ cash: 1_000_000 })
+    for (let i = 0; i < 8; i++) {
+      store.getState().buyRoom('standard')
+      if (i % 4 === 3) store.getState().buyFloor()
+    }
+    const before = store.getState().satisfaction()
+    store.getState().hireStaff('manager')
+    expect(store.getState().satisfaction()).toBe(before)
   })
 })
 
@@ -416,6 +464,31 @@ describe('tickEconomy', () => {
     const upgraded = store.getState().cash - cashBefore
     const baseline = baselineStore.getState().cash - baselineCashBefore
     expect(upgraded).toBeGreaterThan(baseline)
+  })
+
+  it('a manager amplifies an existing receptionist\'s income boost', () => {
+    // See above: pin Math.random() against the event-spawn roll.
+    vi.spyOn(Math, 'random').mockReturnValue(0.999)
+
+    store.setState({ cash: 1_000_000 })
+    store.getState().buyRoom('standard')
+    store.getState().hireStaff('receptionist')
+
+    const baselineStore = createGameStore(`test-save-manager-baseline-${keySuffix}`)
+    baselineStore.setState({ cash: 1_000_000 })
+    baselineStore.getState().buyRoom('standard')
+    baselineStore.getState().hireStaff('receptionist')
+
+    store.getState().hireStaff('manager')
+
+    const cashBefore = store.getState().cash
+    const baselineCashBefore = baselineStore.getState().cash
+    store.getState().tickEconomy(10)
+    baselineStore.getState().tickEconomy(10)
+
+    const withManager = store.getState().cash - cashBefore
+    const withoutManager = baselineStore.getState().cash - baselineCashBefore
+    expect(withManager).toBeGreaterThan(withoutManager)
   })
 })
 
