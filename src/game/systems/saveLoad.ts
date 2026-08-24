@@ -38,7 +38,7 @@ const upgradeLevelsSchema = z.object({
 
 const activeEventSchema = z
   .object({
-    id: z.enum(['weekend_rush', 'happy_hour']),
+    id: z.enum(['weekend_rush', 'happy_hour', 'staff_appreciation_day', 'flash_sale']),
     endsAt: z.number(),
   })
   .nullable()

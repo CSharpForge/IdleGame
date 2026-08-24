@@ -746,3 +746,44 @@ describe('offline earnings on rehydration', () => {
     expect(state.muted).toBe(true)
   })
 })
+
+describe('events affecting satisfaction/room cost', () => {
+  it('an active satisfactionBonus event raises satisfaction', () => {
+    store.setState({ cash: 1_000_000 })
+    store.getState().buyRoom('standard')
+    const before = store.getState().satisfaction()
+    store.setState({ activeEvent: { id: 'staff_appreciation_day', endsAt: Date.now() + 60_000 } })
+    expect(store.getState().satisfaction()).toBeGreaterThan(before)
+  })
+
+  it('an expired satisfactionBonus event has no effect', () => {
+    store.setState({ cash: 1_000_000 })
+    store.getState().buyRoom('standard')
+    const before = store.getState().satisfaction()
+    store.setState({ activeEvent: { id: 'staff_appreciation_day', endsAt: Date.now() - 1000 } })
+    expect(store.getState().satisfaction()).toBe(before)
+  })
+
+  it('an active roomCostDiscount event lowers room cost, and stacks with a cheaperRooms perk without double-counting', () => {
+    // Ample prestige points so all 3 buyPrestigeUpgrade calls below actually
+    // succeed (each level costs more than the last).
+    store.setState({ cash: 1_000_000, totalEarned: MIN_TOTAL_EARNED_TO_PRESTIGE * 1e6 })
+    store.getState().prestige()
+    store.setState({ cash: 1_000_000 })
+    const baseCost = store.getState().nextRoomCost('standard')
+
+    // 3 levels so the discount isn't swallowed by rounding on a cheap room.
+    store.getState().buyPrestigeUpgrade('cheaperRooms')
+    store.getState().buyPrestigeUpgrade('cheaperRooms')
+    store.getState().buyPrestigeUpgrade('cheaperRooms')
+    expect(store.getState().prestigeUpgradeLevels.cheaperRooms).toBe(3)
+    const perkOnlyCost = store.getState().nextRoomCost('standard')
+    expect(perkOnlyCost).toBeLessThan(baseCost)
+
+    store.setState({ activeEvent: { id: 'flash_sale', endsAt: Date.now() + 60_000 } })
+    const bothCost = store.getState().nextRoomCost('standard')
+    expect(bothCost).toBeLessThan(perkOnlyCost)
+    // Multiplicative composition, not double-subtracted: base * 0.91 (perk) * 0.8 (event).
+    expect(bothCost).toBe(Math.round(baseCost * 0.91 * 0.8))
+  })
+})
