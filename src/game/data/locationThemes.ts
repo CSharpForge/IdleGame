@@ -42,6 +42,30 @@ export const LOCATION_THEMES: LocationThemeDef[] = [
     groundColor: '#dcb26b',
     ambientSkyColor: '#ffedcf',
   },
+  {
+    id: 'jungle',
+    label: 'Jungle Canopy Resort',
+    unlockCost: 400_000,
+    skyColor: '#a8d8b0',
+    groundColor: '#3f6b3a',
+    ambientSkyColor: '#c9ecc4',
+  },
+  {
+    id: 'arctic',
+    label: 'Arctic Ice Lodge',
+    unlockCost: 1_500_000,
+    skyColor: '#eaf6ff',
+    groundColor: '#f2f7fb',
+    ambientSkyColor: '#dcefff',
+  },
+  {
+    id: 'volcanic',
+    label: 'Volcanic Rim Retreat',
+    unlockCost: 5_000_000,
+    skyColor: '#e8a86b',
+    groundColor: '#4a3b3a',
+    ambientSkyColor: '#f2c48a',
+  },
 ]
 
 export function getLocationThemeDef(id: LocationThemeId): LocationThemeDef {

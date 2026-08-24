@@ -16,6 +16,11 @@ describe('LOCATION_THEMES', () => {
       expect(LOCATION_THEMES[i].unlockCost).toBeGreaterThan(LOCATION_THEMES[i - 1].unlockCost)
     }
   })
+
+  it('includes the newly added themes', () => {
+    const ids = LOCATION_THEMES.map((t) => t.id)
+    expect(ids).toEqual(expect.arrayContaining(['jungle', 'arctic', 'volcanic']))
+  })
 })
 
 describe('getLocationThemeDef', () => {

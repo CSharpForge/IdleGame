@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ACHIEVEMENTS, getNewlyUnlockedAchievements } from './achievementDefs'
+import { LOCATION_THEMES } from './locationThemes'
 
 const emptySnapshot = {
   totalRoomsBuilt: 0,
@@ -79,12 +80,18 @@ describe('getNewlyUnlockedAchievements', () => {
   })
 
   it('unlocks the all-locations achievement only once every location is unlocked', () => {
-    expect(getNewlyUnlockedAchievements({ ...emptySnapshot, locationsUnlocked: 3 }, []).map((a) => a.id)).not.toContain(
-      'all-locations',
-    )
-    expect(getNewlyUnlockedAchievements({ ...emptySnapshot, locationsUnlocked: 4 }, []).map((a) => a.id)).toContain(
-      'all-locations',
-    )
+    expect(
+      getNewlyUnlockedAchievements(
+        { ...emptySnapshot, locationsUnlocked: LOCATION_THEMES.length - 1 },
+        [],
+      ).map((a) => a.id),
+    ).not.toContain('all-locations')
+    expect(
+      getNewlyUnlockedAchievements(
+        { ...emptySnapshot, locationsUnlocked: LOCATION_THEMES.length },
+        [],
+      ).map((a) => a.id),
+    ).toContain('all-locations')
   })
 
   it('returns nothing once everything achievable has already been recorded', () => {
@@ -94,7 +101,7 @@ describe('getNewlyUnlockedAchievements', () => {
       lifetimeEarned: 1_000_000,
       staffCount: 99,
       staffCountByRole: { manager: 99 },
-      locationsUnlocked: 4,
+      locationsUnlocked: LOCATION_THEMES.length,
       prestigeCount: 99,
       totalUpgradeLevels: 99,
       wingExpansionsTotal: 99,

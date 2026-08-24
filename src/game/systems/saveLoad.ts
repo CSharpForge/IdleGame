@@ -24,7 +24,7 @@ const staffMemberSchema = z.object({
 
 const locationSchema = z.object({
   id: z.string(),
-  themeId: z.enum(['coastal', 'mountain', 'city', 'desert']),
+  themeId: z.enum(['coastal', 'mountain', 'city', 'desert', 'jungle', 'arctic', 'volcanic']),
   floors: z.array(floorSchema),
   rooms: z.record(z.string(), roomSchema),
   staff: z.record(z.string(), staffMemberSchema),

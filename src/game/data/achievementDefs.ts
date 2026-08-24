@@ -1,4 +1,5 @@
 import type { StaffRole } from '../../types/entities'
+import { LOCATION_THEMES } from './locationThemes'
 
 export interface AchievementSnapshot {
   totalRoomsBuilt: number
@@ -87,7 +88,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     id: 'all-locations',
     label: 'Global Hospitality',
     description: 'Unlock every hotel location.',
-    isUnlocked: (s) => s.locationsUnlocked >= 4,
+    isUnlocked: (s) => s.locationsUnlocked >= LOCATION_THEMES.length,
   },
   {
     id: 'first-prestige',

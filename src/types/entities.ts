@@ -25,7 +25,14 @@ export interface StaffMember {
   hiredAt: number
 }
 
-export type LocationThemeId = 'coastal' | 'mountain' | 'city' | 'desert'
+export type LocationThemeId =
+  | 'coastal'
+  | 'mountain'
+  | 'city'
+  | 'desert'
+  | 'jungle'
+  | 'arctic'
+  | 'volcanic'
 
 export interface HotelLocation {
   id: string
