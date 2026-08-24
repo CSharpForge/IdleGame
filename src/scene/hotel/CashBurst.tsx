@@ -37,8 +37,15 @@ function Coin({ x, z, delaySeconds }: { x: number; z: number; delaySeconds: numb
     mesh.visible = true
 
     const t = Math.min(1, (elapsed.current - delaySeconds) / DURATION_SECONDS)
-    mesh.position.y = t * RISE_HEIGHT
-    const scale = 0.3 + t * 0.7
+    // Ease-out (not linear) rise, plus a slight outward drift and a couple
+    // of spins — reads as a proper "burst" instead of coins just climbing
+    // straight up in place.
+    const eased = 1 - (1 - t) * (1 - t)
+    mesh.position.y = eased * RISE_HEIGHT
+    mesh.position.x = x * (1 + eased * 0.2)
+    mesh.position.z = z * (1 + eased * 0.2)
+    mesh.rotation.y = t * Math.PI * 4
+    const scale = 0.3 + eased * 0.7
     mesh.scale.setScalar(scale)
     ;(mesh.material as MeshBasicMaterial).opacity = 1 - t
   })

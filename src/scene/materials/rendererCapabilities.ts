@@ -29,6 +29,10 @@ export interface QualityTier {
   shadowMapSize: [number, number]
   maxConcurrentGuests: number
   outlineEnabled: boolean
+  /** Max exterior decor props (trees, rocks, etc.) rendered around the building. */
+  maxDecorProps: number
+  /** Max simultaneous weather particles (rain/snow/sandstorm/ash); 0 disables weather entirely. */
+  weatherParticleCount: number
 }
 
 export type QualityOverride = 'auto' | 'high' | 'low'
@@ -38,6 +42,8 @@ const HIGH_QUALITY_TIER: QualityTier = {
   shadowMapSize: [1024, 1024],
   maxConcurrentGuests: 40,
   outlineEnabled: true,
+  maxDecorProps: 10,
+  weatherParticleCount: 60,
 }
 
 const LOW_QUALITY_TIER: QualityTier = {
@@ -45,6 +51,8 @@ const LOW_QUALITY_TIER: QualityTier = {
   shadowMapSize: [512, 512],
   maxConcurrentGuests: 15,
   outlineEnabled: false,
+  maxDecorProps: 4,
+  weatherParticleCount: 15,
 }
 
 /**

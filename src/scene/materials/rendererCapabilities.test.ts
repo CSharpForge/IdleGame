@@ -50,6 +50,9 @@ describe('getQualityTier', () => {
     expect(tier.outlineEnabled).toBe(false)
     expect(tier.maxConcurrentGuests).toBeLessThan(40)
     expect(tier.shadowMapSize[0]).toBeLessThan(1024)
+    expect(tier.maxDecorProps).toBeLessThan(10)
+    expect(tier.weatherParticleCount).toBeLessThan(60)
+    expect(tier.weatherParticleCount).toBeGreaterThan(0)
   })
 
   it('returns the high tier for a real GPU renderer', () => {
@@ -58,6 +61,8 @@ describe('getQualityTier', () => {
     expect(tier.outlineEnabled).toBe(true)
     expect(tier.maxConcurrentGuests).toBe(40)
     expect(tier.shadowMapSize).toEqual([1024, 1024])
+    expect(tier.maxDecorProps).toBe(10)
+    expect(tier.weatherParticleCount).toBe(60)
   })
 
   it('falls back to the high tier when renderer detection is unavailable (fails open, not closed)', () => {

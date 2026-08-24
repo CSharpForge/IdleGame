@@ -9,6 +9,8 @@ const DEFAULT_TIER: QualityTier = {
   shadowMapSize: [1024, 1024],
   maxConcurrentGuests: 40,
   outlineEnabled: true,
+  maxDecorProps: 10,
+  weatherParticleCount: 60,
 }
 
 export const QualityTierContext = createContext<QualityTier>(DEFAULT_TIER)

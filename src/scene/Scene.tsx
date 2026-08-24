@@ -5,14 +5,18 @@ import { EffectComposer, Outline, Selection } from '@react-three/postprocessing'
 import { useGameStore } from '../game/state/store'
 import { getLocationThemeDef } from '../game/data/locationThemes'
 import { Building } from './hotel/Building'
+import { Decor } from './hotel/Decor'
 import { GuestSimulation } from './guests/GuestSimulation'
+import { WeatherEffect } from './weather/WeatherEffect'
 import { orbitControlsRef } from './cameraControls'
 import { getQualityTier } from './materials/rendererCapabilities'
 import { QualityTierProvider } from './QualityTierContext'
+import { useDayNightLighting } from './dayNightCycle'
 
 export function Scene() {
   const themeId = useGameStore((s) => s.activeLocation().themeId)
   const theme = getLocationThemeDef(themeId)
+  const dayNight = useDayNightLighting(theme)
   const gl = useThree((state) => state.gl)
   const qualityOverride = useGameStore((s) => s.qualityOverride)
   // Reactive (not a one-time useState): the renderer's software-vs-hardware
@@ -25,22 +29,33 @@ export function Scene() {
       {/* Explicit sky color — without this the canvas is transparent and
           shows whatever the page background happens to be, which flips to
           black on a dark-mode OS/browser (see index.css color-scheme). Tied
-          to the active location's theme so each hotel has its own mood. */}
-      <color attach="background" args={[theme.skyColor]} />
-      <ambientLight intensity={0.7} />
+          to the active location's theme (and time of day) so each hotel has
+          its own mood. */}
+      <color attach="background" args={[dayNight.skyColor]} />
+      <ambientLight intensity={dayNight.ambientIntensity} />
       <directionalLight
         position={[6, 10, 4]}
-        intensity={1.3}
+        intensity={dayNight.directionalIntensity}
+        color={dayNight.directionalColor}
         castShadow={tier.shadowsEnabled}
         shadow-mapSize={tier.shadowMapSize}
       />
-      <hemisphereLight args={[theme.ambientSkyColor, theme.groundColor, 0.4]} />
+      {/* A dim, non-shadow-casting fill light from the opposite side softens
+          the toon material's harshest unlit faces — cheap (no shadow map)
+          and purely a lighting-quality touch, not a new light source a
+          player would consciously notice missing. */}
+      <directionalLight position={[-5, 4, -3]} intensity={dayNight.directionalIntensity * 0.25} color={dayNight.directionalColor} />
+      <hemisphereLight args={[dayNight.ambientSkyColor, dayNight.groundColor, dayNight.hemisphereIntensity]} />
 
       {/* Only Room and GuestAgent wrap their meshes in <Select enabled> (see
           those components) — ghost slots and floor slabs are deliberately
           left out so the outline pass doesn't halo wireframes/flat slabs. */}
+      {/* Decor (static scenery) and the weather overlay deliberately sit
+          outside <Selection> — same reasoning as ghost slots/floor slabs,
+          they're never meant to pick up the outline pass. */}
+      <Decor />
       <Selection>
-        <Building />
+        <Building groundColor={dayNight.groundColor} />
         <GuestSimulation />
         {tier.outlineEnabled && (
           <EffectComposer autoClear={false}>
@@ -48,6 +63,7 @@ export function Scene() {
           </EffectComposer>
         )}
       </Selection>
+      <WeatherEffect />
 
       {/* minDistance/target were tuned on-device for the early-game view
           (see CLAUDE.md's camera-framing note) and don't need to change:

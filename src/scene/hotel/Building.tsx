@@ -1,6 +1,5 @@
 import { Instance, Instances } from '@react-three/drei'
 import { useGameStore } from '../../game/state/store'
-import { getLocationThemeDef } from '../../game/data/locationThemes'
 import { ROOMS_PER_FLOOR } from '../../game/data/roomTypes'
 import { ELEVATOR_X, FLOOR_HEIGHT, floorBaseY, floorSlabPosition, floorSlabSize } from './layout'
 import { Floor } from './Floor'
@@ -66,17 +65,15 @@ function ElevatorCore({ floorCount }: { floorCount: number }) {
   )
 }
 
-export function Building() {
+export function Building({ groundColor }: { groundColor: string }) {
   // Narrow selectors rather than one `s.activeLocation()` call: a mutation
   // to `location.staff` (hiring) has nothing to do with what Building
   // renders, so subscribing to `floors`/`rooms`/`themeId` individually
   // means hiring staff doesn't re-run this component at all. `rooms` still
   // has to be selected (and does still change on every guest occupancy
   // flip) since Room's occupied/vacant visuals flow down through here.
-  const themeId = useGameStore((s) => s.activeLocation().themeId)
   const floors = useGameStore((s) => s.activeLocation().floors)
   const rooms = useGameStore((s) => s.activeLocation().rooms)
-  const theme = getLocationThemeDef(themeId)
 
   // The ground plane must cover the widest floor (a floor widened by a
   // "wing" purchase extends only to the right — see layout.ts) so it never
@@ -89,7 +86,7 @@ export function Building() {
     <group>
       <mesh position={[widestSlabX, -0.15, -0.5]} receiveShadow>
         <boxGeometry args={[widestSlabW + 4, 0.1, 12]} />
-        <meshStandardMaterial color={theme.groundColor} />
+        <meshStandardMaterial color={groundColor} />
       </mesh>
       <ElevatorCore floorCount={floors.length} />
       <FloorSlabsAndRails floors={floors} />
